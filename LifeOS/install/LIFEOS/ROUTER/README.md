@@ -50,7 +50,7 @@ Status: unit-tested with a mocked Jev, bundles to ~9 KB with no node imports, ty
 ## Verification status
 Checked live on 2026-10-08 with the account's own credentials (read-only):
 - **OpenAI lane IDs: confirmed.** `gpt-6-astra`, `gpt-6.1-sol`, `gpt-5.6-terra`, `gpt-6-luna` all appear in the account's `GET /v1/models`. (`gpt-5.6-cyber`, the Helios pin, does **not** appear; it is a Trusted Access model that may be hidden from the list.)
-- **Jev: still unconfirmed.** The client now supports both the native TypeSafe API (`TYPESAFE_API_KEY`, `/v1/systemone`, `noul`) and the Vercel gateway (`AI_GATEWAY_API_KEY`, `/v1/evaluate`, `boolean`). A single live call to the native endpoint with the account's `TYPESAFE_API_KEY` returned **401 authentication_error**. The key may be invalid or expired, may belong to a different service, or the account may be restricted; check it in the TypeSafe console. Until a call succeeds every decision is `source: heuristic`.
+- **Jev: still unconfirmed.** The client supports both the native TypeSafe API (`TYPESAFE_API_KEY`, `/v1/systemone`, `noul`) and the Vercel gateway (`AI_GATEWAY_API_KEY`, `/v1/evaluate`, `boolean`). Live results: the native endpoint with the account's `TYPESAFE_API_KEY` returned **401 authentication_error**; the Vercel gateway with `AI_GATEWAY_API_KEY` authenticated but returned **403 `customer_verification_required`** ("requires a valid credit card on file"), and still did after a card was reportedly added (possibly a different Vercel team, or verification pending). Until a call succeeds every decision is `source: heuristic`.
 
 ## Not verified yet — read before enabling anything
 1. **Jev**: see above. The native request shape comes from third-party write-ups, not TypeSafe's own API reference.

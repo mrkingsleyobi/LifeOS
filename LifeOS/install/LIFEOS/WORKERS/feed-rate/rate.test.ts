@@ -66,6 +66,20 @@ describe("provider wire formats", () => {
     expect(c.init.headers).toMatchObject({ "x-api-key": "k", "anthropic-version": "2023-06-01" });
     expect(b).toMatchObject({ model: "m2", system: "SYS", messages: [{ role: "user", content: "USR" }] });
   });
+  test("anthropic (Haiku 5.5): low effort, thinking headroom, no sampling params, skips thinking blocks", async () => {
+    const c: { init?: any } = {};
+    const f = (async (_u: string, init: any) => { c.init = init; return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "thinking", thinking: "" }, { type: "text", text: "{\"ok\":1}" }] })); }) as any;
+    const out = await callModel({ RATER_PROVIDER: "anthropic", RATER_MODEL: "claude-haiku-5-5", RATER_API_KEY: "k" }, "SYS", "USR", f);
+    const b = JSON.parse(c.init.body);
+    expect(out).toBe('{"ok":1}');
+    expect(b).toMatchObject({ model: "claude-haiku-5-5", max_tokens: 2000, output_config: { effort: "low" } });
+    for (const k of ["temperature", "top_p", "top_k", "thinking"]) expect(b).not.toHaveProperty(k);
+    expect(b.messages.at(-1).role).toBe("user"); // no assistant prefill
+  });
+  test("a model refusal is an error, not an empty rating", async () => {
+    const f = (async () => new Response(JSON.stringify({ stop_reason: "refusal", content: [] }))) as any;
+    await expect(callModel({ RATER_PROVIDER: "anthropic", RATER_MODEL: "claude-haiku-5-5", RATER_API_KEY: "k" }, "s", "u", f)).rejects.toThrow("refused");
+  });
   test("refuses to run unconfigured or with an unknown provider", async () => {
     await expect(callModel({}, "s", "u")).rejects.toThrow("not configured");
     await expect(callModel({ RATER_PROVIDER: "x", RATER_MODEL: "m", RATER_API_KEY: "k" }, "s", "u")).rejects.toThrow("unknown");

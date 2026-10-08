@@ -11,13 +11,18 @@ export async function callModel(env: ProviderEnv, system: string, user: string, 
   const signal = AbortSignal.timeout(timeoutMs);
 
   if (provider === "anthropic") {
+    // Claude Haiku 5.5 ("claude-haiku-5-5"): thinking is on by default and counts toward max_tokens, so leave
+    // headroom and drop effort to "low" for this simple rating task. Sampling params are NOT sent (non-default
+    // values 400 on this model) and there is no assistant prefill. Refusals have no server-side fallback here.
     const res = await fetchFn(`${env.RATER_BASE_URL ?? "https://api.anthropic.com"}/v1/messages`, {
       method: "POST", signal,
       headers: { "x-api-key": env.RATER_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: env.RATER_MODEL, max_tokens: 700, system, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: env.RATER_MODEL, max_tokens: 2000, output_config: { effort: "low" }, system, messages: [{ role: "user", content: user }] }),
     });
     if (!res.ok) throw new Error(`provider ${res.status}`);
-    const text = ((await res.json()) as any)?.content?.find?.((b: any) => b?.type === "text")?.text;
+    const j = (await res.json()) as any;
+    if (j?.stop_reason === "refusal") throw new Error("model refused");
+    const text = j?.content?.find?.((b: any) => b?.type === "text")?.text; // skips any thinking blocks
     if (typeof text !== "string") throw new Error("empty provider response");
     return text;
   }

@@ -1,6 +1,6 @@
 {
   // Rating stage. Shares the `feed` D1 database with feed-ingest (run feed-ingest/schema.sql first).
-  // Secrets:  wrangler secret put RATE_TOKEN   |   wrangler secret put RATER_API_KEY
+  // Secrets:  wrangler secret put RATE_TOKEN   |   wrangler secret put RATER_API_KEY   (an Anthropic API key for the default Haiku setup)
   "name": "arbol-a-feed-rate",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
@@ -9,7 +9,7 @@
   "triggers": { "crons": ["*/10 * * * *"] },
   "d1_databases": [{ "binding": "DB", "database_name": "feed", "database_id": "REPLACE_WITH_D1_ID" }],
   "vars": {
-    "RATER_PROVIDER": "openai",          // "openai" (also any OpenAI-compatible base via RATER_BASE_URL) or "anthropic"
-    "RATER_MODEL": "REPLACE_ME"          // bulk work belongs on the cheap lane (Luna). The ID is NOT verified in this repo; use one your account lists.
+    "RATER_PROVIDER": "anthropic",       // Claude Haiku 5.5: cheap, fast, and keeps untrusted feed text off the OpenAI lanes. "openai" also works.
+    "RATER_MODEL": "claude-haiku-5-5"    // exact ID; no date suffix. Needs the secret RATER_API_KEY = an Anthropic API key.
   }
 }
