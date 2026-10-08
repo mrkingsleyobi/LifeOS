@@ -34,7 +34,9 @@ Feed text is untrusted and ratings drive notifications. So: the item is wrapped 
 ## Deploy
 **One command:** `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… bash deploy.sh` (add `--dry-run` to print the steps). It is idempotent: it reuses the `amber` and `feed` D1 databases if they exist, applies the schemas, deploys all six Workers inert (no delivery channel, no rater key, no feed sources, empty email allowlist), and generates one access token per Worker into `.deploy-tokens.env` (mode 600, gitignored). The token needs Workers Scripts:Edit and D1:Edit.
 
-Status on 2026-10-08: the `amber` and `feed` databases were created in the author's account and **all four schemas ran successfully on real D1**. The Workers themselves were **not deployed**: the deploy step was blocked by the authoring session's permission classifier, so `deploy.sh` has only been dry-run.
+Status on 2026-10-08: **deployed and smoke-tested live** on the author's Cloudflare account (`https://arbol-a-<name>.<your-subdomain>.workers.dev`), then the test data was removed. Verified end to end on real D1: health and 401 on every Worker; capture (URL normalization, dedup across tracking params, `personal` refused and never stored, invalid rejected); ingest of a real public RSS feed (20 items) with the SSRF guards rejecting `http://`, IP literals, `localhost` and credentialed URLs; rating of those 20 items with Luna via OpenRouter (0 failures); the live routing rules over the real ratings; the dispatcher consuming nothing while no channel is configured; and the router Worker deciding with Jev via OpenRouter in about 400 ms. **Not exercised live:** Discord and Resend delivery (no channel was configured on purpose), the email-capture route (needs Email Routing and `ALLOWED_SENDERS`), and the optional queue. One request right after deploy returned a transient 404 that did not reproduce.
+
+Secrets set after deploy so the pipeline works: `RATER_API_KEY` (rate Worker) and `OPENROUTER_API_KEY` (router Worker), both an OpenRouter key. Everything else stays inert until you set it.
 
 The manual steps it automates:
 ```bash
