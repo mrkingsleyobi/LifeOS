@@ -2731,6 +2731,28 @@ elif [ "${usage_state:-absent}" != "absent" ]; then
         _bar_scoped=$(render_usage_meter "$usage_scoped_int" "$_rsc_txt")
         scoped_fmt=" ${_scoped_label_color}${usage_scoped_name}${RESET} ${_bar_scoped}"
     fi
+    # OpenAI weekly window (OAI WK) — Codex rate limits read from codex's own
+    # rollout logs by OpenAIUsage.ts (no network). Cached 30s so the 1s tick
+    # never respawns bun; absent when codex has never run on this machine.
+    oai_fmt=""
+    if [ -n "$BUN_BIN" ]; then
+        _oai_cache="/tmp/lifeos-oai-usage-${USER:-anon}.sh"
+        if [ ! -f "$_oai_cache" ] || [ $(( NOW_EPOCH - $(get_mtime "$_oai_cache") )) -ge 30 ]; then
+            "$BUN_BIN" "$LIFEOS_DIR/TOOLS/OpenAIUsage.ts" > "${_oai_cache}.tmp.$$" 2>/dev/null \
+                && mv -f "${_oai_cache}.tmp.$$" "$_oai_cache" 2>/dev/null
+            rm -f "${_oai_cache}.tmp.$$" 2>/dev/null
+        fi
+        oai_present=false; oai_wk_pct=0; oai_wk_reset=0
+        [ -f "$_oai_cache" ] && eval "$(grep -E '^oai_(present|wk_pct|wk_reset)=[a-z0-9]+$' "$_oai_cache")"
+        if [ "$oai_present" = "true" ]; then
+            _oai_rst=""
+            if [ "${oai_wk_reset:-0}" -gt 0 ] 2>/dev/null; then
+                _oai_str=$(reset_time_str "$oai_wk_reset")
+                _oai_rst=$(_bar_rst "${_oai_str%%@*}" "${_oai_str#*@}")
+            fi
+            oai_fmt=" ${_reset_color}OAI WK${RESET} $(render_usage_meter "${oai_wk_pct:-0}" "$_oai_rst")"
+        fi
+    fi
     # Billing source indicator — colored = actively billing, slate-dim = inactive.
     # Three-way: SUB (subscription), EXT (Anthropic extra usage credits), API
     # (API-key billing). EXT segment renders only when extra usage is enabled
@@ -2766,7 +2788,7 @@ elif [ "${usage_state:-absent}" != "absent" ]; then
         [ -n "$credits_off_display" ] && _billing_fmt="${_billing_fmt} ${USAGE_EXTRA}${credits_off_display}${RESET}"
     fi
     # %b (not a format string) — the bars carry literal % signs and ANSI escapes
-    printf '%b' "${_5h_label_color}5H${RESET} ${_bar_5h} ${_7d_label_color}WK${RESET} ${_bar_7d}${scoped_fmt} ${_billing_fmt}"
+    printf '%b' "${_5h_label_color}5H${RESET} ${_bar_5h} ${_7d_label_color}WK${RESET} ${_bar_7d}${scoped_fmt}${oai_fmt} ${_billing_fmt}"
     [ -n "$stale_suffix" ] && printf '%b' "$stale_suffix"
     printf "\n"
     sep
