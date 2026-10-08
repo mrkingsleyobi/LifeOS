@@ -7,7 +7,10 @@ live here instead.) The router edge is `../ROUTER/worker`.
 | Worker | Subsystem | Does | Doesn't |
 |---|---|---|---|
 | `synapse-capture` | Synapse inputs #9 reader upvote, #10 gesture/webhook, #11 email | `POST /capture` and an Email Routing `email()` handler: contract validation, URL normalization, dedup, write-ahead append to a D1 ledger, optional queue fan-out | Grading, routing, attachments |
+| `feed-ingest` | Feed ingest + poller | Cron-driven (`*/15`) poll of D1-registered RSS/Atom sources: parse, dedup, append items; circuit breaker (200 with zero items is a soft failure; exponential backoff; auto-disable at 10 errors); SSRF guards (https only, no IPs/credentials/ports/internal hosts, re-checked after redirects); `POST /sources`, `POST /poll` | Summarize, rate, deliver; the reader-proxy / self-hosted-proxy fetch fallback tiers; YouTube/social sources |
 | `feed-route` | Feed `A_FEED_ROUTE` | `POST /route`: rated items → destination + priority from `rules.json` (first match wins) | Delivery (Discord/email/blog/social), ingest, summarize, rate, polling |
+
+`feed-ingest` parses XML with `fast-xml-parser` pinned at 5.11.1 (Aug 27; the latest is days old). Items it stores have no rating yet: the summarize/rate stage that fills `quality_score`, tier and labels for `feed-route` is not built, so `feed-route` will archive everything until it exists.
 
 Shared helpers (auth, body cap, hashing) are in `_shared/arbol.ts`; nothing here imports Node.
 
@@ -30,6 +33,13 @@ wrangler d1 create amber                       # paste database_id into wrangler
 wrangler d1 execute amber --remote --file=schema.sql
 wrangler secret put CAPTURE_TOKEN
 wrangler deploy
+
+cd ../feed-ingest
+wrangler d1 create feed                        # paste database_id into wrangler.jsonc
+wrangler d1 execute feed --remote --file=schema.sql
+wrangler secret put INGEST_TOKEN
+wrangler deploy                                # cron trigger `*/15 * * * *` is in wrangler.jsonc
+curl -X POST $URL/sources -H "Authorization: Bearer $TOKEN" -d '{"url":"https://example.com/feed.xml"}'
 
 cd ../feed-route
 wrangler secret put FEED_TOKEN
