@@ -1,0 +1,13 @@
+{
+  // Arbol-style Action Worker. Create the DB first:  wrangler d1 create amber  → paste the id below,
+  // then:  wrangler d1 execute amber --remote --file=schema.sql
+  "name": "arbol-a-synapse-capture",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "amber", "database_id": "REPLACE_WITH_D1_ID" }]
+  // Optional async grade/route fan-out (create the queue, then uncomment):
+  // "queues": { "producers": [{ "binding": "GRADE_QUEUE", "queue": "synapse-grade" }] }
+  // Secret: wrangler secret put CAPTURE_TOKEN
+}
