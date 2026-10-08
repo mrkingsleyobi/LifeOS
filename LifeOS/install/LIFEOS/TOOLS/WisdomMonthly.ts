@@ -20,7 +20,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, lstatSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
-import { scrub } from "./TelosReviewer";
+import { sample, scrub, stripTags } from "./MemoryGuards";
 
 export const KINDS = ["new-frame", "frame-update", "principle"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -31,6 +31,7 @@ const MAX_FILES = 60, MAX_FILE_CHARS = 2500, MAX_TOTAL_CHARS = 80_000, MAX_CANDI
 const DOMAIN_RX = /^[a-z][a-z0-9-]{1,40}$/;
 
 export const root = () => process.env.WISDOM_ROOT || join(process.env.HOME ?? homedir(), ".claude");
+/** Label by the month the window mostly covers (the midpoint), so a run on Nov 1 that summarizes October is filed under October. */
 export const monthLabel = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 
 function walk(dir: string, out: string[], depth = 0): void {
@@ -51,7 +52,7 @@ export function gatherLearning(now = Date.now(), days = 30): Evidence[] {
   const out: Evidence[] = []; let total = 0;
   for (const { p } of recent) {
     if (total >= MAX_TOTAL_CHARS) break;
-    const text = scrub(readFileSync(p, "utf-8")).slice(0, MAX_FILE_CHARS);
+    const text = sample(scrub(readFileSync(p, "utf-8")), MAX_FILE_CHARS, p);
     total += text.length; out.push({ path: relative(r, p), text });
   }
   return out;
@@ -71,7 +72,7 @@ A candidate is a repeated pattern, not a one-off: cite at least ${MIN_EVIDENCE} 
 Output ONLY JSON: {"candidates":[{"kind":"…","domain":"lowercase-slug","title":"≤100 chars","statement":"≤500 chars","evidence":["<path from the learning data, exactly>"],"confidence":0.0-1.0}]}. At most ${MAX_CANDIDATES}.`;
 
 export function buildPrompt(frames: string[], ev: Evidence[]): string {
-  const clean = (s: string) => s.replace(/<\/?(learning|frames)>/gi, "");
+  const clean = (s: string) => stripTags(s, ["learning", "frames"]);
   return `<frames>\n${frames.map(clean).join("\n") || "(none)"}\n</frames>\n\n<learning>\n${ev.map(e => `--- ${e.path}\n${clean(e.text)}`).join("\n")}\n</learning>`;
 }
 
@@ -113,7 +114,7 @@ const defaultInfer: InferFn = async (systemPrompt, userPrompt) => {
 export interface RunResult { status: "written" | "skipped" | "no-evidence" | "failed" | "dry-run"; path?: string; candidates?: number; reason?: string }
 
 export async function run(opts: { force?: boolean; dryRun?: boolean; days?: number; now?: number; infer?: InferFn } = {}): Promise<RunResult> {
-  const now = opts.now ?? Date.now(), month = monthLabel(new Date(now));
+  const now = opts.now ?? Date.now(), month = monthLabel(new Date(now - (opts.days ?? 30) * 43_200_000));
   const dir = join(root(), "MEMORY/WISDOM/CANDIDATES"), path = join(dir, `${month}.md`);
   if (existsSync(path) && !opts.force) return { status: "skipped", path, reason: "this month is already synthesized (use --force)" };
   const ev = gatherLearning(now, opts.days ?? 30), frames = existingFrames();
