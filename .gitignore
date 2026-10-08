@@ -72,3 +72,4 @@ out/
 private/
 secrets/
 credentials/
+LifeOS/install/LIFEOS/WORKERS/.deploy-tokens.env
