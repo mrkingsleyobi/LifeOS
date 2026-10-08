@@ -9,10 +9,11 @@ permissions:
     - "Read(*)"
     - "Grep(*)"
     - "Glob(*)"
-    - "Write(*)"
-    - "Edit(*)"
 maxTurns: 30
 disallowedTools:
+  - Write
+  - Edit
+  - MultiEdit
   - NotebookEdit
 ---
 

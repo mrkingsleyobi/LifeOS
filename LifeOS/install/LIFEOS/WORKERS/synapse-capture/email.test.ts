@@ -107,6 +107,13 @@ describe("email capture", () => {
     expect(row.content_kind).toBe("note");
     expect(row.url).toBeNull();
   });
+  test("a malformed Date header does not throw; the message is still captured", async () => {
+    const bad = rfc(["From: me@example.com", "Subject: Odd date", "Message-ID: <d1@example.com>", "Date: not a real date", "Content-Type: text/plain", "", "Note to self about https://example.org/x"]);
+    const m = mail(bad);
+    await worker.email(m, env, ctx);
+    expect(m.rejected).toBeUndefined();
+    expect(count()).toBe(1);
+  });
   test("an empty message is rejected, not journaled", async () => {
     const m = mail(rfc(["From: me@example.com", "Message-ID: <e@example.com>", "Content-Type: text/plain", "", ""]));
     await worker.email(m, env, ctx);

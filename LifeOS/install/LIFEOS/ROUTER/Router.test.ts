@@ -134,3 +134,36 @@ describe("Jev credential picker + openrouter flavor", () => {
     } finally { globalThis.fetch = real; }
   });
 });
+
+import { resolve } from "./Router";
+import { jevEgressOn } from "./Policy";
+
+describe("Jev egress is opt-in (privacy)", () => {
+  const real = globalThis.fetch; const saved = { ...process.env };
+  afterEach(() => { globalThis.fetch = real; for (const k of ["OPENROUTER_API_KEY", "ROUTER_JEV_EGRESS", "JEV_PROVIDER", "ROUTER_WORKER_URL", "ROUTER_WORKER_TOKEN"]) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } });
+  const arm = () => { let calls = 0; const answers = Object.fromEntries(Object.keys(QUESTIONS).map((k) => [k, { noul: 0.1 }])); globalThis.fetch = (async () => { calls++; return new Response(JSON.stringify({ answers })); }) as any; return () => calls; };
+
+  test("jevEgressOn: default off; env overrides lanes.json; only exactly 'on' enables", () => {
+    expect(jevEgressOn(cfg)).toBe(false);
+    expect(jevEgressOn(cfg, "on")).toBe(true);
+    expect(jevEgressOn({ ...cfg, jev: { ...cfg.jev, egress: "on" } })).toBe(true);
+    expect(jevEgressOn({ ...cfg, jev: { ...cfg.jev, egress: "on" } }, "off")).toBe(false);
+    expect(jevEgressOn(cfg, "yes")).toBe(false);
+  });
+  test("a key in the environment alone does NOT send the prompt anywhere", async () => {
+    process.env.OPENROUTER_API_KEY = "k"; delete process.env.ROUTER_JEV_EGRESS; delete process.env.ROUTER_WORKER_URL; process.env.JEV_PROVIDER = "openrouter";
+    const calls = arm();
+    const d = await resolve("Please plan my weekend and mention my doctor appointment");
+    expect(calls()).toBe(0);
+    expect(d.source).toBe("heuristic");
+  });
+  test("ROUTER_JEV_EGRESS=on enables it; the privacy gate still stops sensitive prompts first", async () => {
+    process.env.OPENROUTER_API_KEY = "k"; process.env.ROUTER_JEV_EGRESS = "on"; process.env.JEV_PROVIDER = "openrouter";
+    const calls = arm();
+    expect((await resolve("Write 40 job descriptions from this template")).source).toBe("jev");
+    expect(calls()).toBe(1);
+    const gated = await resolve("my api_key=abcd1234efgh5678 stopped working");
+    expect(gated.private).toBe(true);
+    expect(calls()).toBe(1); // no second call: the gate fired before any network
+  });
+});

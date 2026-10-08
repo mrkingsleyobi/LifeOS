@@ -2740,9 +2740,14 @@ elif [ "${usage_state:-absent}" != "absent" ]; then
     if [ -n "$BUN_BIN" ]; then
         _oai_cache="/tmp/lifeos-oai-usage-${USER:-anon}.sh"
         if [ ! -f "$_oai_cache" ] || [ $(( NOW_EPOCH - $(get_mtime "$_oai_cache") )) -ge 30 ]; then
-            "$BUN_BIN" "$LIFEOS_DIR/TOOLS/OpenAIUsage.ts" > "${_oai_cache}.tmp.$$" 2>/dev/null \
-                && mv -f "${_oai_cache}.tmp.$$" "$_oai_cache" 2>/dev/null
-            rm -f "${_oai_cache}.tmp.$$" 2>/dev/null
+            # mktemp (unpredictable, 0600) instead of a guessable name: no symlink-redirected write in a shared /tmp.
+            [ -L "$_oai_cache" ] && rm -f "$_oai_cache" 2>/dev/null
+            _oai_tmp=$(mktemp "${_oai_cache}.XXXXXX" 2>/dev/null)
+            if [ -n "$_oai_tmp" ]; then
+                "$BUN_BIN" "$LIFEOS_DIR/TOOLS/OpenAIUsage.ts" > "$_oai_tmp" 2>/dev/null \
+                    && mv -f "$_oai_tmp" "$_oai_cache" 2>/dev/null
+                rm -f "$_oai_tmp" 2>/dev/null
+            fi
         fi
         oai_present=false; oai_wk_pct=0; oai_wk_reset=0
         [ -f "$_oai_cache" ] && eval "$(grep -E '^oai_(present|wk_pct|wk_reset)=[a-z0-9]+$' "$_oai_cache")"

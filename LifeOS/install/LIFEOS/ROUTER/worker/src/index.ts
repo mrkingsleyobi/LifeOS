@@ -12,10 +12,10 @@
  * second line of defense, but by then the text has already been transmitted.
  */
 import cfg from "../../lanes.json";
-import { decide, heuristicProbs, privacyGate, privateDecision, redact, type LanesConfig } from "../../Policy";
+import { decide, heuristicProbs, jevEgressOn, privacyGate, privateDecision, redact, type LanesConfig } from "../../Policy";
 import { DEFAULT_BASE, evaluate, pickJev, type JevEnv } from "../../JevCore";
 
-export interface Env extends JevEnv { ROUTER_TOKEN: string; JEV_BASE_URL?: string }
+export interface Env extends JevEnv { ROUTER_TOKEN: string; JEV_BASE_URL?: string; /** "on" lets this Worker send redacted prompts to Jev. Unset = heuristic only. */ JEV_EGRESS?: string }
 
 const MAX_BODY = 32 * 1024;
 const DEPTH = /\b(think (deeply|hard)|ultrathink|deep(ly)? analy[sz]e)\b/i;
@@ -60,7 +60,7 @@ export default {
     if (gate) {
       decision = privateDecision(gate, c);
     } else {
-      const cred = pickJev(env);
+      const cred = jevEgressOn(c, env.JEV_EGRESS ?? "off") ? pickJev(env) : undefined;
       const probs = cred ? await evaluate(cred.key, env.JEV_BASE_URL ?? DEFAULT_BASE[cred.flavor], redact(prompt), c.jev.timeoutMs, cred.flavor) : null;
       decision = decide(probs ?? heuristicProbs(prompt, facts), facts, probs ? "jev" : "heuristic", c);
     }

@@ -55,6 +55,11 @@ describe("channels and formatting", () => {
     expect(a.text).not.toContain("javascript:");
     expect(clean("a\u0000b\u2028c", 10)).toBe("a b c");
   });
+  test("a model-written summary cannot form a masked link or a suppressed-embed autolink", () => {
+    const a = formatAlert({ id: "x", tier: "A", title: "Normal title", summary_short: "Read [the report](https://evil.example/login) or <https://evil.example/x> now", url: "https://ok.example/1" });
+    expect(a.text).not.toMatch(/\]\(|<https?:/);
+    expect(a.text).toContain("(the report)");
+  });
   test("digest lists items and keeps good links only", () => {
     const d = formatDigest("daily", [{ id: "1", tier: "A", title: "One", url: "https://ok.example/1", summary_short: "s" }, { id: "2", tier: "B", title: "Two", url: "ftp://no" }]);
     expect(d.subject).toBe("Feed daily digest (2)");
@@ -106,6 +111,13 @@ describe("dispatchTick", () => {
     urgentSecurity(); mode = { discord: 500, email: 500 };
     for (let i = 0; i < MAX_ATTEMPTS + 3; i++) await dispatchTick(env, NOW + i * 1000, fakeFetch);
     expect(one("SELECT attempts, status FROM deliveries")).toEqual({ attempts: MAX_ATTEMPTS, status: "failed" });
+  });
+  test("two overlapping runs send one alert, not two (cron overlap or a manual POST /dispatch)", async () => {
+    urgentSecurity();
+    const results = await Promise.all([dispatchTick(env, NOW, fakeFetch), dispatchTick(env, NOW, fakeFetch)]);
+    expect(results.reduce((n, r) => n + r.sent, 0)).toBe(1);
+    expect(calls.filter((c) => c.url.includes("discord"))).toHaveLength(1);
+    expect(one("SELECT count(*) AS n FROM deliveries WHERE destination = 'notify'").n).toBe(1);
   });
   test("destinations with no adapter are recorded as unsupported, never dropped", async () => {
     addRated({ tier: "A", q: 85, labels: ["AI"] });

@@ -67,7 +67,7 @@ export async function handleEmail(message: EmailMessage, env: EmailEnv, ctx: Ctx
     title: subject || undefined,
     author: message.from,
     privacy_class: "public", // the explicit rule — see header
-    captured_at: parsed.date ? new Date(parsed.date).toISOString() : undefined,
+    captured_at: Number.isFinite(Date.parse(parsed.date ?? "")) ? new Date(parsed.date!).toISOString() : undefined, // a bad Date header must not throw
   });
   // A URL we cannot normalize (e.g. malformed) should not sink the capture: retry as note-only.
   const v2 = v.ok || !link ? v : validate({ source: "email", external_id: parsed.messageId?.trim() || `${message.from}|${subject}`, content, content_kind: "note", title: subject || undefined, author: message.from, privacy_class: "public" });

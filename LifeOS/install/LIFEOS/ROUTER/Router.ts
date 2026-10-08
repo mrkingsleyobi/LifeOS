@@ -17,7 +17,7 @@ import { homedir } from "node:os";
 import { LANES, laneModel } from "../TOOLS/models";
 import { askJev, jevConfigured } from "./Jev";
 import { loadConfig, hashPrompt } from "./Config";
-import { decide, heuristicProbs, privacyGate, privateDecision, redact, type Decision } from "./Policy";
+import { decide, heuristicProbs, jevEgressOn, privacyGate, privateDecision, redact, type Decision } from "./Policy";
 
 const HOME = process.env.HOME ?? homedir();
 const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
@@ -50,7 +50,9 @@ export async function resolve(prompt: string): Promise<Decision & { latencyMs: n
         // local privacy gate above passed. Any failure falls through to direct Jev, then heuristic.
         const edge = await viaWorker(prompt, cfg.jev.timeoutMs + 500);
         if (edge) return edge;
-        const jev = await askJev(redact(prompt), cfg.jev.timeoutMs);
+        // Direct third-party egress needs explicit consent (ROUTER_JEV_EGRESS=on or lanes.json jev.egress). Reaching the
+        // Worker above is its own explicit opt-in (ROUTER_WORKER_URL), so it is not gated here.
+        const jev = jevEgressOn(cfg, process.env.ROUTER_JEV_EGRESS) ? await askJev(redact(prompt), cfg.jev.timeoutMs) : null;
         return decide(jev ?? heuristicProbs(prompt, facts), facts, jev ? "jev" : "heuristic", cfg);
       })();
   return { ...d, latencyMs: Date.now() - t0 };
@@ -72,7 +74,7 @@ if (import.meta.main) {
     for (const [k, l] of Object.entries(LANES)) console.log(`${String(l.rank).padStart(2)}  ${k.padEnd(6)} ${l.vendor.padEnd(9)} ${laneModel(k)}`);
   } else if (cmd === "status") {
     const n = existsSync(SHADOW_LOG) ? readFileSync(SHADOW_LOG, "utf-8").split("\n").filter(Boolean).length : 0;
-    console.log(JSON.stringify({ mode: loadConfig().mode, jevConfigured: jevConfigured(), shadowLog: SHADOW_LOG, decisions: n }, null, 2));
+    console.log(JSON.stringify({ mode: loadConfig().mode, jevConfigured: jevConfigured(), jevEgress: jevEgressOn(loadConfig(), process.env.ROUTER_JEV_EGRESS), shadowLog: SHADOW_LOG, decisions: n }, null, 2));
   } else if (cmd === "audit") {
     const rows = existsSync(SHADOW_LOG) ? readFileSync(SHADOW_LOG, "utf-8").split("\n").filter(Boolean).map(l => JSON.parse(l)) : [];
     const by = (k: string) => rows.reduce((a: Record<string, number>, r) => ((a[r[k]] = (a[r[k]] ?? 0) + 1), a), {});

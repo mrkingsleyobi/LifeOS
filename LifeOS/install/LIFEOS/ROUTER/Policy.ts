@@ -13,7 +13,7 @@ export interface LanesConfig {
   specialtyLanes?: Record<string, { question: string; threshold: number }>;
   fusion: { enabled: boolean; lanes: string[]; whenScoreAtLeast: number };
   privateLane: { allowedVendors: string[]; chain: string[] };
-  jev: { timeoutMs: number; sensitiveThreshold: number };
+  jev: { timeoutMs: number; sensitiveThreshold: number; egress?: "on" | "off" };
 }
 
 export type Probs = Record<string, number>;
@@ -55,6 +55,9 @@ export function redact(prompt: string): string {
     .replace(/\+?\d[\d\s().-]{8,}\d/g, "[number]")
     .replace(/https?:\/\/\S+/g, "[url]");
 }
+
+/** Third-party egress for prompts is opt-in. An explicit env/var value wins over lanes.json; anything but "on" is off. */
+export const jevEgressOn = (cfg: LanesConfig, override?: string): boolean => (override ?? cfg.jev.egress ?? "off") === "on";
 
 export function scoreOf(p: Probs, cfg: LanesConfig): number {
   let s = 0;

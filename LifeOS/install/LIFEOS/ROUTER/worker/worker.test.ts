@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import worker, { type Env } from "./src/index";
 import { QUESTIONS } from "../JevCore";
 
-const env: Env = { ROUTER_TOKEN: "t0ken", AI_GATEWAY_API_KEY: "k" };
+const env: Env = { ROUTER_TOKEN: "t0ken", AI_GATEWAY_API_KEY: "k", JEV_EGRESS: "on" };
 const call = (body: unknown, token = "t0ken", path = "/route", method = "POST") =>
   worker.fetch(new Request(`https://x.test${path}`, { method, headers: { Authorization: `Bearer ${token}` }, body: method === "POST" ? JSON.stringify(body) : undefined }), env);
 
@@ -41,4 +41,11 @@ describe("arbol-a-router-decide", () => {
     expect(r.private).toBe(true);
   });
   test("caps payload size", async () => expect((await call({ prompt: "x".repeat(40_000) })).status).toBe(413));
+  test("without JEV_EGRESS=on the Worker never sends a prompt to Jev, even with a key configured", async () => {
+    let called = false;
+    globalThis.fetch = (async () => { called = true; return new Response("{}"); }) as any;
+    const r = await worker.fetch(new Request("https://x.test/route", { method: "POST", headers: { Authorization: "Bearer t0ken" }, body: JSON.stringify({ prompt: "summarize these notes into bullets" }) }), { ROUTER_TOKEN: "t0ken", AI_GATEWAY_API_KEY: "k" });
+    expect(((await r.json()) as any).source).toBe("heuristic");
+    expect(called).toBe(false);
+  });
 });

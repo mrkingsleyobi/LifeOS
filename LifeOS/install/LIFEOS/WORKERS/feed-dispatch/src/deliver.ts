@@ -16,9 +16,15 @@ export const channels = (env: DeliverEnv): string[] => [
   ...(env.RESEND_API_KEY && env.EMAIL_FROM && env.EMAIL_TO ? ["email"] : []),
 ];
 
-/** Strip control chars, collapse whitespace, defuse @mentions, cap length. */
+/**
+ * Strip control chars, collapse whitespace, defuse @mentions, neutralize link syntax, cap length.
+ * The summary comes from a model that read untrusted text, so it can carry a masked link like
+ * [click here](https://evil.example) that Discord would render as a normal-looking link; brackets and
+ * angle brackets become parentheses so no masked link or suppressed-embed autolink can be formed.
+ */
 export const clean = (s: string | null | undefined, max: number) =>
-  (s ?? "").replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").replace(/@/g, "@\u200b").trim().slice(0, max);
+  (s ?? "").replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").replace(/\s+/g, " ")
+    .replace(/[\[<]/g, "(").replace(/[\]>]/g, ")").replace(/@/g, "@\u200b").trim().slice(0, max);
 const safeUrl = (u: string | null | undefined) => (u && /^https?:\/\/[^\s<>"]+$/.test(u) ? u.slice(0, 500) : "");
 
 export function formatAlert(it: AlertItem): { subject: string; text: string } {

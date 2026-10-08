@@ -61,7 +61,9 @@ export async function dispatchTick(env: Env, now = Date.now(), fetchFn: typeof f
     for (const dest of rt.destinations) {
       if (dest === "archive") await upsert(env, it.id, dest, rt.priority, "archived", now);
       else if (dest === "digest" || (dest === "notify" && rt.priority !== "immediate")) { await upsert(env, it.id, dest === "notify" ? "digest" : dest, rt.priority, "queued", now); out.queued++; }
-      else if (dest === "notify") { await upsert(env, it.id, dest, rt.priority, "pending", now); alerts.push({ it, labels }); }
+      // Only the run that actually inserts the row may send: a concurrent run (cron overlap, manual POST /dispatch)
+      // loses the INSERT OR IGNORE race and must not send a duplicate alert.
+      else if (dest === "notify") { if ((await upsert(env, it.id, dest, rt.priority, "pending", now)).meta.changes > 0) alerts.push({ it, labels }); }
       else { await upsert(env, it.id, dest, rt.priority, "unsupported", now, "no delivery adapter for this destination"); out.unsupported++; }
     }
   }

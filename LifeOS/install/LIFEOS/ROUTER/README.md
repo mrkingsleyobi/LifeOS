@@ -24,6 +24,9 @@ prompt → privacy gate (local, deterministic) ─ hit ─► private lane (Anth
 | `omniroute/` | Generated OmniRoute combos for the OpenAI lanes |
 | `../../hooks/RouterShadow.hook.ts` | UserPromptSubmit hook that runs `resolve` and logs |
 
+## Privacy: sending prompts to Jev is opt-in
+Jev is a third party (reached via OpenRouter, TypeSafe or Vercel). The local privacy gate catches credentials, TELOS material, `USER` paths and `.env` references, **not** ordinary personal text, and redaction only strips emails, phone numbers and URLs. So direct egress is **off by default**: a Jev key sitting in your environment does nothing until you set `ROUTER_JEV_EGRESS=on` (or `jev.egress: "on"` in `lanes.json`); until then every decision is `heuristic`. Using the cloud edge (`ROUTER_WORKER_URL`) is its own explicit opt-in, and the Worker has a separate `JEV_EGRESS` var (`on` in `wrangler.jsonc`; set `off` for heuristic-only). `Router.ts status` shows the current state. Found by the 2026-10-08 security review; this repo's own data-classification doctrine allows broker routes for public data only.
+
 ## Modes
 - **Tiered:** score bands in `lanes.json` pick luna → terra → sol → fable → astra (opus replaces sol for code changes).
 - **Combo / Fallback chain:** `fallbackChains` per lane; the OpenAI part is mirrored as OmniRoute `fallbackTier` links.

@@ -94,7 +94,9 @@
   },
   "jev": {
     "timeoutMs": 1500,
-    "sensitiveThreshold": 0.5
+    "sensitiveThreshold": 0.5,
+    "egress": "off",
+    "_egress_note": "Sending prompts to Jev (a third party, via OpenRouter/TypeSafe/Vercel) is OFF by default: the local privacy gate only catches credentials and known private paths, not ordinary personal text. Turn on with ROUTER_JEV_EGRESS=on (or set this to \"on\"). The deployed Worker has its own explicit JEV_EGRESS var."
   },
   "specialtyLanes": {
     "cyber": {
