@@ -1,0 +1,18 @@
+{
+  "_doc": "Feed routing rules, from DOCUMENTATION/Feed/FeedSystem.md § Route. FIRST MATCH WINS, so order is priority. A field the item does not carry never matches (a missing urgency is unknown, not zero). The example rules use tier/urgency/importance/labels, which the doc says are PLANNED in the live deployment — only quality_score is written today, so until those are rated, items fall through to the default.",
+  "rules": [
+    { "name": "Critical security",
+      "when": { "all": [ { "field": "tier", "in": ["S", "A"] }, { "field": "urgency", "gte": 8 }, { "field": "labels", "has": "Security" } ] },
+      "destinations": ["notify"], "priority": "immediate" },
+    { "name": "Breaking news",
+      "when": { "all": [ { "field": "labels", "has": "Breaking" }, { "field": "urgency", "gte": 9 } ] },
+      "destinations": ["notify"], "priority": "immediate" },
+    { "name": "High-quality AI content",
+      "when": { "all": [ { "field": "tier", "in": ["S", "A"] }, { "field": "labels", "has": "AI" }, { "field": "quality_score", "gte": 80 } ] },
+      "destinations": ["blog-draft", "social-post"], "priority": "daily" },
+    { "name": "Weekly digest material",
+      "when": { "all": [ { "field": "tier", "in": ["S", "A", "B"] }, { "field": "importance", "gte": 6 } ] },
+      "destinations": ["digest"], "priority": "weekly" }
+  ],
+  "default": { "name": "Everything else", "destinations": ["archive"], "priority": "archive" }
+}

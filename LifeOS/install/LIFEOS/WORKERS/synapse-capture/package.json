@@ -1,0 +1,6 @@
+{
+  "name": "arbol-a-synapse-capture",
+  "private": true,
+  "type": "module",
+  "dependencies": { "postal-mime": "3.0.0" }
+}
