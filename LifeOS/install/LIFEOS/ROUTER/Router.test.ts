@@ -185,8 +185,8 @@ describe("review fixes", () => {
     process.env.ROUTER_WORKER_URL = "https://w.example"; process.env.ROUTER_WORKER_TOKEN = "t";
     let sent = "";
     globalThis.fetch = (async (_u: any, init: any) => { sent = JSON.parse(init.body).prompt; return new Response(JSON.stringify(good)); }) as any;
-    await resolve("Summarize the notes in /Users/alice/.claude/USER/TELOS/GOALS.md for the team please");
-    expect(sent).not.toContain("/Users/alice");
+    await resolve("Email the summary to alice@example.com or call +1 415 555 0100 about https://example.com/doc");
+    expect(sent).toBe("Email the summary to [email] or call [number] about [url]");
   });
   test("a malformed or stale Worker answer is ignored and the local path decides", async () => {
     process.env.ROUTER_WORKER_URL = "https://w.example"; process.env.ROUTER_WORKER_TOKEN = "t"; delete process.env.OPENROUTER_API_KEY;
