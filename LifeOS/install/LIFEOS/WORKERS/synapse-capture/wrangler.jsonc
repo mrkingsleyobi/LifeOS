@@ -9,5 +9,6 @@
   "d1_databases": [{ "binding": "DB", "database_name": "amber", "database_id": "REPLACE_WITH_D1_ID" }]
   // Optional async grade/route fan-out (create the queue, then uncomment):
   // "queues": { "producers": [{ "binding": "GRADE_QUEUE", "queue": "synapse-grade" }] }
-  // Secret: wrangler secret put CAPTURE_TOKEN
+  // Secrets: wrangler secret put CAPTURE_TOKEN   |   wrangler secret put ALLOWED_SENDERS   (email route only; unset = email rejected)
+  // Optional var: REQUIRE_AUTH_RESULTS="true" (see README before enabling)
 }
