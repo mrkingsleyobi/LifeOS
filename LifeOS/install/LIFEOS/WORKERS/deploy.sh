@@ -18,7 +18,7 @@ export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-${CF_API_TOKEN:-}}" CLOUDFL
 WR="bunx wrangler@4.143.1"            # pinned: a release a few weeks old, not whatever is newest
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROUTER="$HERE/../ROUTER/worker"
 TOKENS="$HERE/.deploy-tokens.env"
-say() { printf '\n== %s\n' "$*"; }
+say() { printf '\n== %s\n' "$*" >&2; }   # stderr: ensure_db's stdout is captured as the database id
 run() { if [ "$DRY" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
 db_id() { # name -> uuid (empty if absent)
@@ -52,12 +52,13 @@ deploy() { # dir db_id secret_var
   local dir="$1" id="$2" var="$3"
   say "deploy $(basename "$dir")"
   ( cd "$dir"
+    [ -f package.json ] && run bun install --frozen-lockfile   # postal-mime / fast-xml-parser must resolve before bundling
     if [ -n "$id" ]; then sed "s/REPLACE_WITH_D1_ID/$id/" wrangler.jsonc > wrangler.deploy.jsonc; else cp wrangler.jsonc wrangler.deploy.jsonc; fi
     trap 'rm -f wrangler.deploy.jsonc' EXIT
     run $WR deploy -c wrangler.deploy.jsonc
     if [ "$DRY" = 1 ]; then echo "[dry-run] set secret $var"; else printf '%s' "$(token_for "$var")" | $WR secret put "$var" -c wrangler.deploy.jsonc >/dev/null; fi )
 }
-deploy "$ROUTER"                ""       ROUTER_TOKEN
+[ -f "$ROUTER/wrangler.jsonc" ] && deploy "$ROUTER" "" ROUTER_TOKEN || echo "(skipping the router Worker: $ROUTER has no wrangler.jsonc)"
 deploy "$HERE/synapse-capture"  "$AMBER" CAPTURE_TOKEN
 deploy "$HERE/feed-ingest"      "$FEED"  INGEST_TOKEN
 deploy "$HERE/feed-rate"        "$FEED"  RATE_TOKEN

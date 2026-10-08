@@ -22,6 +22,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, lstatSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
+import { sample, scrub, stripTags } from "./MemoryGuards";
+export { scrub };
 
 export const KINDS = ["goal-deferral", "new-strategy", "mission-drift"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -29,20 +31,10 @@ export interface Proposal { kind: Kind; title: string; rationale: string; sugges
 export interface Evidence { path: string; text: string }
 
 const MAX_FILES = 40, MAX_FILE_CHARS = 3000, MAX_TOTAL_CHARS = 60_000, MAX_PROPOSALS = 8;
+const PM_REL = "USER/PRINCIPAL/PRINCIPAL_MEMORY.md";
 const TELOS_FILES = ["GOALS.md", "STRATEGIES.md", "MISSION.md"];
 
 export const root = () => process.env.TELOS_ROOT || join(process.env.HOME ?? homedir(), ".claude");
-
-/** Credential-shaped strings never leave the machine, even inside a private-lane prompt. */
-export function scrub(s: string): string {
-  return s
-    .replace(/\b(sk|rk|pk)-[A-Za-z0-9_-]{16,}/g, "[REDACTED]")
-    .replace(/\bgh[pousr]_[A-Za-z0-9]{20,}/g, "[REDACTED]")
-    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED]")
-    .replace(/https:\/\/discord(?:app)?\.com\/api\/webhooks\/\S+/g, "[REDACTED]")
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/g, "Bearer [REDACTED]")
-    .replace(/\b([A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD))\s*[=:]\s*\S+/g, "$1=[REDACTED]");
-}
 
 /** ISO week label, e.g. 2026-W41. */
 export function isoWeek(d: Date): string {
@@ -69,7 +61,7 @@ export function gatherEvidence(now = Date.now(), days = 7): Evidence[] {
   const r = root(), since = now - days * 86_400_000, files: { p: string; m: number }[] = [];
   for (const [dir, rx] of [["MEMORY/WORK", /^ISA\.md$/], ["MEMORY/LEARNING", /\.(md|jsonl?)$/], ["MEMORY/WISDOM", /\.md$/]] as const) {
     const found: string[] = []; walk(join(r, dir), found, rx);
-    for (const p of found) { const m = statSync(p).mtimeMs; if (m >= since) files.push({ p, m }); }
+    for (const p of found) { if (/\/WISDOM\/CANDIDATES\//.test(p)) continue; /* unreviewed model output is not evidence */ const m = statSync(p).mtimeMs; if (m >= since) files.push({ p, m }); }
   }
   files.sort((a, b) => b.m - a.m);
   const out: Evidence[] = []; let total = 0;
@@ -77,7 +69,7 @@ export function gatherEvidence(now = Date.now(), days = 7): Evidence[] {
   const list = [...(existsSync(pm) ? [pm] : []), ...files.map(f => f.p)].slice(0, MAX_FILES);
   for (const p of list) {
     if (total >= MAX_TOTAL_CHARS) break;
-    const text = scrub(readFileSync(p, "utf-8")).slice(0, MAX_FILE_CHARS);
+    const text = sample(scrub(readFileSync(p, "utf-8")), MAX_FILE_CHARS, p);
     total += text.length; out.push({ path: relative(r, p), text });
   }
   return out;
@@ -97,7 +89,7 @@ Propose only what the evidence supports. Prefer proposing nothing over weak prop
 Output ONLY JSON: {"proposals":[{"kind":"…","title":"≤100 chars","rationale":"≤600 chars","suggested_change":"≤600 chars","evidence":["<path from the evidence, exactly>"],"confidence":0.0-1.0}]}. At most ${MAX_PROPOSALS}. Empty list is a valid answer.`;
 
 export function buildPrompt(telos: Evidence[], ev: Evidence[]): string {
-  const wrap = (tag: string, items: Evidence[]) => `<${tag}>\n${items.map(e => `--- ${e.path}\n${e.text.replace(/<\/?(evidence|telos)>/gi, "")}`).join("\n")}\n</${tag}>`;
+  const wrap = (tag: string, items: Evidence[]) => `<${tag}>\n${items.map(e => `--- ${e.path}\n${stripTags(e.text, ["evidence", "telos"])}`).join("\n")}\n</${tag}>`;
   return `${wrap("telos", telos)}\n\n${wrap("evidence", ev)}`;
 }
 
@@ -142,7 +134,7 @@ export async function review(opts: { force?: boolean; dryRun?: boolean; days?: n
   const dir = join(root(), "MEMORY/TELOS_REVIEWS"), path = join(dir, `${week}.md`);
   if (existsSync(path) && !opts.force) return { status: "skipped", path, reason: "this week is already reviewed (use --force)" };
   const telos = readTelos(), ev = gatherEvidence(now, opts.days ?? 7);
-  if (!telos.length || !ev.length) return { status: "no-evidence", reason: !telos.length ? "no TELOS files found" : "no evidence in the window" };
+  if (!telos.length || !ev.some(e => e.path !== PM_REL)) return { status: "no-evidence", reason: !telos.length ? "no TELOS files found" : "no evidence in the window" };
   if (opts.dryRun) return { status: "dry-run", proposals: 0, reason: `${ev.length} evidence files, ${buildPrompt(telos, ev).length} prompt chars` };
 
   const res = await (opts.infer ?? defaultInfer)(SYSTEM_PROMPT, buildPrompt(telos, ev));

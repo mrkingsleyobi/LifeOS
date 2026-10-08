@@ -16,6 +16,12 @@ function rollout(day: string, name: string, lines: string[]) {
 const ev = (rl: unknown) => JSON.stringify({ payload: { type: "token_count", info: {}, rate_limits: rl } });
 
 describe("OpenAIUsage", () => {
+  test("a stray file where a directory is expected (.DS_Store) does not hide valid rollouts", () => {
+    rollout("08", "c".repeat(8) + "-cccc-cccc-cccc-" + "c".repeat(12), [ev({ secondary: { used_percent: 20, window_minutes: 10080, resets_at: NOW + 86400 } })]);
+    writeFileSync(join(dir, "2026", "10", "zz-stray"), "x");   // sorts first when reversed; readdirSync on it throws ENOTDIR
+    writeFileSync(join(dir, "2026", "zz-stray"), "x");
+    expect(readOpenAIUsage(NOW).weekly?.pct).toBe(20);
+  });
   test("no sessions directory: absent", () => {
     process.env.CODEX_SESSIONS_DIR = join(dir, "nope");
     expect(readOpenAIUsage(NOW).present).toBe(false);

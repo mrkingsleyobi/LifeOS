@@ -36,16 +36,18 @@ export interface Window { pct: number; resetsAt: number; windowMinutes: number }
 export interface OpenAIUsage { present: boolean; fiveHour: Window | null; weekly: Window | null }
 
 const sortedDesc = (dir: string) => readdirSync(dir).sort().reverse();
+/** A stray file (.DS_Store) where a directory is expected must not abort the whole scan. */
+const safeDesc = (dir: string) => { try { return sortedDesc(dir); } catch { return []; } };
 
 /** Newest-first rollout paths, by the YYYY/MM/DD directory layout then filename. */
 function newestRollouts(root: string, limit: number): string[] {
   const out: string[] = [];
   for (const y of sortedDesc(root)) {
     if (!/^\d{4}$/.test(y)) continue;
-    for (const m of sortedDesc(join(root, y))) {
-      for (const d of sortedDesc(join(root, y, m))) {
+    for (const m of safeDesc(join(root, y))) {
+      for (const d of safeDesc(join(root, y, m))) {
         const dir = join(root, y, m, d);
-        for (const f of sortedDesc(dir)) {
+        for (const f of safeDesc(dir)) {
           if (/^rollout-.*\.jsonl$/.test(f)) out.push(join(dir, f));
           if (out.length >= limit) return out;
         }

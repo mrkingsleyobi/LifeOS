@@ -23,7 +23,7 @@ import { channels, formatAlert, formatDigest, send, type AlertItem, type Deliver
 interface Stmt { bind(...v: unknown[]): Stmt; run(): Promise<{ meta: { changes: number } }>; all<T = any>(): Promise<{ results: T[] }> }
 export interface Env extends DeliverEnv, DraftEnv { DISPATCH_TOKEN: string; DB: { prepare(sql: string): Stmt } }
 
-export const MAX_IMMEDIATE = 5, BATCH = 50, STALE_MS = 24 * 3_600_000, MAX_ATTEMPTS = 3, DIGEST_MAX = 50, MAX_DRAFTS = 3;
+export const MAX_IMMEDIATE = 5, BATCH = 50, STALE_MS = 24 * 3_600_000, MAX_ATTEMPTS = 3, DIGEST_MAX = 50, MAX_DRAFTS = 3, PENDING_STUCK_MS = 15 * 60_000; // a "pending" alert this old lost its worker mid-send
 
 interface Rated extends Omit<AlertItem, "labels"> { rated_at: number; flagged: number; labels: string; importance: number; novelty: number; urgency: number }
 
@@ -38,8 +38,8 @@ export async function dispatchTick(env: Env, now = Date.now(), fetchFn: typeof f
   // 1. Retry earlier failed alerts (bounded attempts, last 24h).
   const failed = await env.DB.prepare(
     `SELECT d.item_id AS id, i.title, i.url, r.tier, r.summary_short, r.labels FROM deliveries d JOIN items i ON i.id = d.item_id JOIN ratings r ON r.item_id = d.item_id
-     WHERE d.destination = 'notify' AND d.status = 'failed' AND d.attempts < ? AND d.created_at > ? LIMIT ?`,
-  ).bind(MAX_ATTEMPTS, now - STALE_MS, MAX_IMMEDIATE).all<any>();
+     WHERE d.destination = 'notify' AND (d.status = 'failed' OR (d.status = 'pending' AND d.created_at < ?)) AND d.attempts < ? AND d.created_at > ? LIMIT ?`,
+  ).bind(now - PENDING_STUCK_MS, MAX_ATTEMPTS, now - STALE_MS, MAX_IMMEDIATE).all<any>();
   for (const f of failed.results) {
     const r = await send(env, formatAlert({ ...f, labels: JSON.parse(f.labels) }), fetchFn);
     await env.DB.prepare("UPDATE deliveries SET status = ?, attempts = attempts + 1, last_error = ?, sent_at = ? WHERE item_id = ? AND destination = 'notify'")

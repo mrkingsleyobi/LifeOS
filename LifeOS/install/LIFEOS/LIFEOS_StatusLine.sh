@@ -2749,8 +2749,8 @@ elif [ "${usage_state:-absent}" != "absent" ]; then
             [ -L "$_oai_cache" ] && rm -f "$_oai_cache" 2>/dev/null
             _oai_tmp=$(mktemp "${_oai_cache}.XXXXXX" 2>/dev/null)
             if [ -n "$_oai_tmp" ]; then
-                "$BUN_BIN" "$LIFEOS_DIR/TOOLS/OpenAIUsage.ts" > "$_oai_tmp" 2>/dev/null \
-                    && mv -f "$_oai_tmp" "$_oai_cache" 2>/dev/null
+                "$BUN_BIN" "$LIFEOS_DIR/TOOLS/OpenAIUsage.ts" > "$_oai_tmp" 2>/dev/null || echo "oai_present=false" > "$_oai_tmp"   # a failed run still caches, so the 1s tick never respawns bun
+                mv -f "$_oai_tmp" "$_oai_cache" 2>/dev/null
                 rm -f "$_oai_tmp" 2>/dev/null
             fi
         fi
@@ -2760,7 +2760,7 @@ elif [ "${usage_state:-absent}" != "absent" ]; then
             _oai_rst=""
             if [ "${oai_wk_reset:-0}" -gt 0 ] 2>/dev/null; then
                 _oai_str=$(reset_time_str "$oai_wk_reset")
-                _oai_rst=$(_bar_rst "${_oai_str%%@*}" "${_oai_str#*@}")
+                case "$_oai_str" in *@*) _oai_rst=$(_bar_rst "${_oai_str%%@*}" "${_oai_str#*@}");; *) _oai_rst="";; esac   # "now" (expired window) has no @
             fi
             oai_fmt=" ${_reset_color}OAI WK${RESET} $(render_usage_meter "${oai_wk_pct:-0}" "$_oai_rst")"
         fi

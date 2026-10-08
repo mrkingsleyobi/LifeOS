@@ -24,6 +24,7 @@ export const channels = (env: DeliverEnv): string[] => [
  */
 export const clean = (s: string | null | undefined, max: number) =>
   (s ?? "").replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").replace(/\s+/g, " ")
+    .replace(/https?:\/\/\S+/gi, "(link removed)").replace(/[*`~|]/g, "") // untrusted text carries no clickable links or markdown; the item's own URL is added separately
     .replace(/[\[<]/g, "(").replace(/[\]>]/g, ")").replace(/@/g, "@\u200b").trim().slice(0, max);
 const safeUrl = (u: string | null | undefined) => (u && /^https?:\/\/[^\s<>"]+$/.test(u) ? u.slice(0, 500) : "");
 
@@ -41,12 +42,31 @@ export function formatDigest(kind: string, items: AlertItem[]): { subject: strin
   return { subject: `Feed ${kind} digest (${items.length})`, text: `${items.length} item${items.length === 1 ? "" : "s"}\n\n${body}` };
 }
 
+const DISCORD_MAX = 1900, DISCORD_CHUNKS = 6;
+
+/** Split on line boundaries into <=1900-char messages so a long digest is delivered whole, not silently cut. */
+export function chunkText(text: string, max = DISCORD_MAX): string[] {
+  const out: string[] = []; let cur = "";
+  for (const raw of text.split("\n")) {
+    for (let line = raw; ; ) {
+      const piece = line.slice(0, max); line = line.slice(max);
+      if (cur && cur.length + piece.length + 1 > max) { out.push(cur); cur = ""; }
+      cur = cur ? `${cur}\n${piece}` : piece;
+      if (!line) break;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
 async function discord(env: DeliverEnv, text: string, fetchFn: typeof fetch) {
-  const res = await fetchFn(env.DISCORD_WEBHOOK_URL!, {
-    method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(10_000),
-    body: JSON.stringify({ content: text.slice(0, 1900), allowed_mentions: { parse: [] } }),
-  });
-  if (!res.ok) throw new Error(`discord ${res.status}`);
+  for (const content of chunkText(text).slice(0, DISCORD_CHUNKS)) {
+    const res = await fetchFn(env.DISCORD_WEBHOOK_URL!, {
+      method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+    });
+    if (!res.ok) throw new Error(`discord ${res.status}`);
+  }
 }
 
 async function email(env: DeliverEnv, subject: string, text: string, fetchFn: typeof fetch) {

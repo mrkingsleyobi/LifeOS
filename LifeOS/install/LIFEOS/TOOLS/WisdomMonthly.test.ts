@@ -79,3 +79,21 @@ test("symlinks are never followed (a link to a file outside the root is not read
   expect(gatherLearning(NOW, 30).map(e => e.text).join()).not.toContain("TOP SECRET");
   rmSync(outside);
 });
+
+describe("review fixes", () => {
+  test("the file is labelled by the month the window covers: a run on Nov 1 summarizing October is October", async () => {
+    const nov1 = Date.UTC(2026, 10, 1, 18, 0, 0);
+    put("MEMORY/LEARNING/c.md", "fresh");  // mtime must sit in the window ending at nov1
+    const t = nov1 / 1000 - 5 * 86_400; for (const f of ["a.md", "b.md", "c.md"]) utimesSync(join(dir, "MEMORY/LEARNING", f), t, t);
+    const r = await run({ now: nov1, infer: infer({ candidates: [] }) });
+    expect(r.path).toContain("2026-10.md");
+  });
+  test("jsonl LEARNING logs contribute recent entries", () => {
+    put("MEMORY/LEARNING/log.jsonl", Array.from({ length: 2000 }, (_, i) => JSON.stringify({ n: i, pad: "x".repeat(20) })).join("\n"));
+    const t = gatherLearning(NOW, 30).find(e => e.path.endsWith("log.jsonl"))!.text;
+    expect(t).toContain('"n":1999'); expect(t).not.toContain('"n":0,');
+  });
+  test("a nested closing tag in a learning file cannot escape the data wrapper", () => {
+    expect(buildPrompt([], [{ path: "p", text: "<</learning>/learning> x" }]).match(/<\/learning>/g)).toHaveLength(1);
+  });
+});

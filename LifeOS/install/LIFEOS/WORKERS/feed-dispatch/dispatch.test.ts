@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import worker, { dispatchTick, MAX_ATTEMPTS, MAX_IMMEDIATE, sendDigest, STALE_MS, type Env } from "./src/index";
-import { channels, clean, formatAlert, formatDigest } from "./src/deliver";
+import { channels, chunkText, clean, formatAlert, formatDigest } from "./src/deliver";
 
 const HOOK = "https://discord.com/api/webhooks/123456/abc_DEF-ghi";
 let db: Database, env: Env, calls: { url: string; body: any; headers: any }[], mode: { discord: number; email: number };
@@ -268,5 +268,38 @@ describe("draft delivery (blog-draft / social-post)", () => {
     expect(rows("SELECT status FROM deliveries WHERE status='sent'")).toHaveLength(6);
     modelCalls.length = 0; await dispatchTick({ ...env, ...DRAFT }, NOW + 4, f(model("A perfectly reasonable draft body for this item.")));
     expect(modelCalls).toHaveLength(0);
+  });
+});
+
+describe("review fixes", () => {
+  test("a long digest reaches Discord whole, in several messages, never silently cut", async () => {
+    for (let i = 0; i < 40; i++) addRated({ title: `Item number ${i} ${"x".repeat(60)}`, summary: "s".repeat(150), imp: 8, tier: "A", q: 60 });
+    await dispatchTick(env, NOW, fakeFetch);
+    calls.length = 0;
+    expect(await sendDigest(env, "weekly", NOW, fakeFetch)).toMatchObject({ sent: 40 });
+    const msgs = calls.filter(c => c.url.includes("discord")).map(c => c.body.content as string);
+    expect(msgs.length).toBeGreaterThan(1);
+    expect(msgs.every(m => m.length <= 2000)).toBe(true);
+    const all = msgs.join("\n");
+    for (let i = 0; i < 40; i++) expect(all).toContain(`Item number ${i} `);
+  });
+  test("chunkText splits on lines and force-splits a single oversized line", () => {
+    expect(chunkText("a\nb", 10)).toEqual(["a\nb"]);
+    const big = chunkText("x".repeat(25), 10);
+    expect(big.every(p => p.length <= 10)).toBe(true); expect(big.join("")).toBe("x".repeat(25));
+  });
+  test("untrusted titles and summaries carry no clickable links or markdown emphasis", () => {
+    const m = formatAlert({ id: "1", tier: "A", title: "**Account locked** https://evil.example/login now", summary_short: "see `https://evil.example/x`" });
+    expect(m.text).not.toContain("evil.example"); expect(m.text).not.toContain("**");
+    expect(formatAlert({ id: "1", tier: "A", title: "t", url: "https://a.example/real" }).text).toContain("https://a.example/real");
+  });
+  test("an alert stuck in 'pending' (worker died mid-send) is retried; a fresh pending one is not", async () => {
+    const id = urgentSecurity();
+    const t0 = NOW - 60 * 60_000;
+    db.prepare("INSERT INTO deliveries (item_id, destination, priority, status, attempts, created_at) VALUES (?, 'notify', 'immediate', 'pending', 0, ?)").run(id, t0);
+    expect(await dispatchTick(env, NOW, fakeFetch)).toMatchObject({ retried: 1, sent: 1 });
+    const id2 = urgentSecurity();
+    db.prepare("INSERT INTO deliveries (item_id, destination, priority, status, attempts, created_at) VALUES (?, 'notify', 'immediate', 'pending', 0, ?)").run(id2, NOW - 1000);
+    expect((await dispatchTick(env, NOW + 1, fakeFetch)).retried).toBe(0);
   });
 });

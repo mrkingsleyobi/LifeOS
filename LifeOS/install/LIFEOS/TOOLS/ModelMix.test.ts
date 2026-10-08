@@ -79,6 +79,12 @@ describe("computeMix per-lane attribution (fixture of real Codex 0.160.0 rollout
     rollout("gpt-5.6-terra", 999, Date.now() - 3 * 3_600_000);
     expect(mm.computeMix("s-old").laneTokens.terra).toBe(0);
   });
+  test("only a SOL dispatch lights the SOL (forge) flag; a Luna/Terra/Astra-only session does not", () => {
+    session("s-luna-only", ["Luna"], 0);
+    expect(mm.computeMix("s-luna-only")).toMatchObject({ crossVendor: true, forgeUsed: false });
+    session("s-sol-used", ["Luna", "Sol"], 0);
+    expect(mm.computeMix("s-sol-used").forgeUsed).toBe(true);
+  });
   test("a session with no OpenAI dispatch reports zero lanes", () => {
     session("s-claude", [], 200);
     const m = mm.computeMix("s-claude");

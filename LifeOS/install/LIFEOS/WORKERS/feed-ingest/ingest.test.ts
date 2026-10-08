@@ -210,3 +210,16 @@ describe("fetch-tier fallback", () => {
     expect(one("SELECT last_status, error_count FROM sources")).toEqual({ last_status: "ok+reader-proxy", error_count: 0 });
   });
 });
+
+describe("review fixes", () => {
+  test("a source whose processing throws still backs off and counts toward auto-disable (it must not stay due forever)", async () => {
+    await post("/sources", { url: "https://a.example/f" });
+    db.exec("CREATE TRIGGER boom BEFORE INSERT ON items BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+    const f = feedFetch({ "https://a.example/f": () => new Response(RSS) });
+    const r = await pollDue(env, 1000, f);
+    expect(r.failed).toBe(1);
+    const row = one("SELECT error_count, next_poll_at, last_status FROM sources");
+    expect(row.error_count).toBe(1); expect(row.next_poll_at).toBeGreaterThan(1000); expect(row.last_status).toBe("internal_error");
+    expect((await pollDue(env, 1001, f)).polled).toBe(0); // no longer due, so it cannot starve healthy sources
+  });
+});
