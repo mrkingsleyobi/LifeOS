@@ -4,7 +4,7 @@
  * Data (bands, weights, chains) lives in lanes.json; this file only applies it.
  */
 export interface LanesConfig {
-  mode: "shadow" | "enforce";
+  mode: "shadow" | "advise";
   bands: { max: number; lane: string }[];
   codeChangeOverride: { fromLane: string; toLane: string };
   weights: Record<string, number>;
@@ -24,6 +24,8 @@ export interface Decision {
   score: number;
   private: boolean;
   fusion: boolean;
+  /** Light work (chat, lookups) that is not worth a dispatch: handle in the session. */
+  inline: boolean;
   fallback: string[];
   source: "jev" | "heuristic" | "private-gate";
   reason: string;
@@ -91,7 +93,8 @@ export function heuristicProbs(prompt: string, f: Facts): Probs {
     creativeOrStrategic: has(/\b(brainstorm|idea|positioning|narrative)\b/),
     bulkRepetitiveTemplated: has(/\b(sds|jds?|job descriptions?|batch|each of|for every|bulk|template)\b/),
     formatBoundFromGivenContent: has(/\b(summari[sz]e|extract|reformat|convert|translate|classify)\b/),
-    simpleLookupOrChat: f.chars < 80 ? 0.8 : 0,
+    // Short is not the same as chat: "write 40 job descriptions from this template" is 58 characters of real work.
+    simpleLookupOrChat: f.chars < 80 && !/\b(write|draft|create|generate|build|implement|fix|debug|explain|plan|design|review|analy[sz]e|summari[sz]e|convert|translate|extract|classify|research|compare|refactor|find|list|prepare|produce|rewrite|edit)\b/.test(t) ? 0.8 : 0,
     isSecurityWork: has(/\b(pentest|penetration test|vulnerabilit(y|ies)|exploit|malware|ctf|cve-\d|threat model|reverse engineer)\b/),
     isCodeChange: has(/\b(implement|fix|bug|function|refactor|test|code)\b/),
   };
@@ -108,6 +111,7 @@ export function decide(p: Probs, f: Facts, source: "jev" | "heuristic", cfg: Lan
     lane, score, source,
     effort: effortOf(score, f.depthWords, cfg),
     private: false,
+    inline: !specialty && (p.simpleLookupOrChat ?? 0) >= 0.6 && (lane === "luna" || lane === "terra"),
     fusion: cfg.fusion.enabled && score >= cfg.fusion.whenScoreAtLeast,
     fallback: cfg.fallbackChains[lane] ?? [],
     reason: specialty ? `task type → ${lane}` : `intelligence ${score.toFixed(2)} → ${lane}`,
@@ -116,5 +120,5 @@ export function decide(p: Probs, f: Facts, source: "jev" | "heuristic", cfg: Lan
 
 export function privateDecision(why: string, cfg: LanesConfig, source: Decision["source"] = "private-gate"): Decision {
   const [lane, ...rest] = cfg.privateLane.chain;
-  return { lane, effort: "high", score: 1, private: true, fusion: false, fallback: rest, source, reason: `private lane: ${why}` };
+  return { lane, effort: "high", score: 1, private: true, inline: false, fusion: false, fallback: rest, source, reason: `private lane: ${why}` };
 }

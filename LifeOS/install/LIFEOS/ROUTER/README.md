@@ -1,6 +1,6 @@
 # Router
 
-Decides which lane (model) and effort a prompt deserves. **Shadow mode: it logs, it does not enforce.**
+Decides which lane (model) and effort a prompt deserves. **It can log (`shadow`, the default) or log and advise the session (`advise`). A hook cannot change the model of the session you are typing into, so there is no stronger mode.**
 
 ```
 prompt → privacy gate (local, deterministic) ─ hit ─► private lane (Anthropic only, no Jev, no gateway)
@@ -23,6 +23,13 @@ prompt → privacy gate (local, deterministic) ─ hit ─► private lane (Anth
 | `worker/` | `arbol-a-router-decide`: Cloudflare Worker edge running the same Policy + Jev, so the Jev key stays off your machine |
 | `omniroute/` | Generated OmniRoute combos for the OpenAI lanes |
 | `../../hooks/RouterShadow.hook.ts` | UserPromptSubmit hook that runs `resolve` and logs |
+
+## Modes: shadow (default) and advise
+Set `"mode"` in `lanes.json`.
+- **`shadow`**: the hook logs each decision (prompt hash and sizes, never the text) and prints nothing. Use it to see what the router would do.
+- **`advise`**: same logging, plus **one line** injected into the session in a `<router-advice>` block, e.g. `ROUTER (advisory): intelligence 0.80 → fable, effort high. Work you delegate fits Agent(Fable) …`. The session then decides whether to dispatch the lane agent; the main-loop model stays whatever you chose with `/model`. The advice is built only from fixed strings and the router's own enums, never from your prompt, so it cannot carry injected text. Light work (chat, simple lookups) gets "handle it inline"; sensitive content gets "keep ALL work on the Anthropic session model".
+
+**Audit what actually happened:** `bun LIFEOS/ROUTER/Router.ts audit --compare` joins the decision log with the dispatch log (`subagent-events.jsonl`) and reports, per lane, how often the first agent dispatched in the same session within 10 minutes matched the advised lane (decisions with no dispatch count as consistent only when inline/private). Use it to tune `lanes.json` weights before trusting `advise` for everything. Installing: the hook ships in `hooks/hooks.json`; it takes effect on your machine when the hooks are installed or upgraded (`InstallHooks.ts`).
 
 ## Privacy: sending prompts to Jev is opt-in
 Jev is a third party (reached via OpenRouter, TypeSafe or Vercel). The local privacy gate catches credentials, TELOS material, `USER` paths and `.env` references, **not** ordinary personal text, and redaction only strips emails, phone numbers and URLs. So direct egress is **off by default**: a Jev key sitting in your environment does nothing until you set `ROUTER_JEV_EGRESS=on` (or `jev.egress: "on"` in `lanes.json`); until then every decision is `heuristic`. Using the cloud edge (`ROUTER_WORKER_URL`) is its own explicit opt-in, and the Worker has a separate `JEV_EGRESS` var (`on` in `wrangler.jsonc`; set `off` for heuristic-only). `Router.ts status` shows the current state. Found by the 2026-10-08 security review; this repo's own data-classification doctrine allows broker routes for public data only.

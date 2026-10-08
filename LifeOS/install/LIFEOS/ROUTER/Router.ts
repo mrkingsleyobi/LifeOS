@@ -15,6 +15,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { LANES, laneModel } from "../TOOLS/models";
+import { compareDecisions } from "./Audit";
 import { askJev, jevConfigured } from "./Jev";
 import { loadConfig, hashPrompt } from "./Config";
 import { decide, heuristicProbs, jevEgressOn, privacyGate, privateDecision, redact, type Decision } from "./Policy";
@@ -78,6 +79,12 @@ if (import.meta.main) {
   } else if (cmd === "audit") {
     const rows = existsSync(SHADOW_LOG) ? readFileSync(SHADOW_LOG, "utf-8").split("\n").filter(Boolean).map(l => JSON.parse(l)) : [];
     const by = (k: string) => rows.reduce((a: Record<string, number>, r) => ((a[r[k]] = (a[r[k]] ?? 0) + 1), a), {});
-    console.log(JSON.stringify({ total: rows.length, lane: by("lane"), source: by("source"), effort: by("effort"), private: rows.filter(r => r.private).length }, null, 2));
-  } else { console.error("usage: Router.ts resolve <prompt> | lanes | status | audit"); process.exit(2); }
+    const summary: Record<string, unknown> = { total: rows.length, lane: by("lane"), source: by("source"), effort: by("effort"), private: rows.filter(r => r.private).length, inline: rows.filter(r => r.inline).length };
+    if (rest.includes("--compare")) {
+      const ev = join(dirname(SHADOW_LOG), "subagent-events.jsonl");
+      const events = existsSync(ev) ? readFileSync(ev, "utf-8").split("\n").filter(Boolean).flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } }) : [];
+      summary.compare = compareDecisions(rows, events);
+    }
+    console.log(JSON.stringify(summary, null, 2));
+  } else { console.error("usage: Router.ts resolve <prompt> | lanes | status | audit [--compare]"); process.exit(2); }
 }

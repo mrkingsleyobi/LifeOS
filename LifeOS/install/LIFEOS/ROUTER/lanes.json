@@ -104,5 +104,6 @@
       "threshold": 0.6,
       "note": "Helios refuses work without authorization context (pentest scope, CTF, defensive use); the router only routes. Never reached when the privacy gate or Jev's sensitivity flag fires."
     }
-  }
+  },
+  "_mode_note": "shadow = log only. advise = log AND inject one line of advice into the session (the session then decides whether to dispatch the lane agent). A hook cannot change the main-loop model, so there is no stronger mode."
 }
