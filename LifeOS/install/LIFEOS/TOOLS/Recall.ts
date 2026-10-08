@@ -16,7 +16,7 @@
  * is not the per-turn path.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, lstatSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { scrub } from "./TelosReviewer";
@@ -38,8 +38,8 @@ export function loadCorpus(): Doc[] {
     if (depth > 5 || !existsSync(dir)) return;
     for (const n of readdirSync(dir)) {
       if (n.startsWith("_")) continue; // _harvest-queue and other unreviewed staging
-      const p = join(dir, n); let st; try { st = statSync(p); } catch { continue; }
-      if (st.isSymbolicLink?.()) continue;
+      const p = join(dir, n); let st; try { st = lstatSync(p); } catch { continue; } // lstat: statSync follows links
+      if (st.isSymbolicLink()) continue;
       if (st.isDirectory()) walk(p, depth + 1);
       else if (n.endsWith(".md") && st.size < 500_000) out.push({ path: relative(root(), p), text: scrub(readFileSync(p, "utf-8")) });
     }

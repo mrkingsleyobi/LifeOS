@@ -17,7 +17,7 @@
  * Schedule monthly yourself (launchd/cron), e.g. the 1st at 18:00. No scheduler is installed.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, lstatSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { scrub } from "./TelosReviewer";
@@ -37,8 +37,8 @@ function walk(dir: string, out: string[], depth = 0): void {
   if (depth > 6 || !existsSync(dir)) return;
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
-    let st; try { st = statSync(p); } catch { continue; }
-    if (st.isSymbolicLink?.()) continue;
+    let st; try { st = lstatSync(p); } catch { continue; } // lstat: statSync follows links, so a symlink check on it never fires
+    if (st.isSymbolicLink()) continue;
     if (st.isDirectory()) walk(p, out, depth + 1);
     else if (/\.(md|jsonl?)$/.test(name)) out.push(p);
   }

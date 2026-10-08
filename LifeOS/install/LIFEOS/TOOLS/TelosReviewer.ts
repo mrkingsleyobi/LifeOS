@@ -19,7 +19,7 @@
  * Schedule weekly (launchd/cron), e.g. Sunday 18:00:  bun ~/.claude/LIFEOS/TOOLS/TelosReviewer.ts review
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, lstatSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 
@@ -57,8 +57,8 @@ function walk(dir: string, out: string[], match: RegExp, depth = 0): void {
   if (depth > 6 || !existsSync(dir)) return;
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
-    let st; try { st = statSync(p); } catch { continue; }
-    if (st.isSymbolicLink?.()) continue;
+    let st; try { st = lstatSync(p); } catch { continue; } // lstat: statSync follows links, so a symlink check on it never fires
+    if (st.isSymbolicLink()) continue;
     if (st.isDirectory()) walk(p, out, match, depth + 1);
     else if (match.test(name)) out.push(p);
   }

@@ -70,3 +70,14 @@ describe("recall loop", () => {
     expect((await recall("q", { corpus: [], infer: loop })).steps).toBe(0);
   });
 });
+
+test("symlinks in the knowledge tree are never loaded", () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = require("node:fs");
+  const { tmpdir } = require("node:os"); const { join } = require("node:path");
+  const d = mkdtempSync(join(tmpdir(), "rc-")); mkdirSync(join(d, "MEMORY/KNOWLEDGE"), { recursive: true });
+  writeFileSync(join(d, "secret.md"), "TOP SECRET"); writeFileSync(join(d, "MEMORY/KNOWLEDGE/ok.md"), "fine");
+  symlinkSync(join(d, "secret.md"), join(d, "MEMORY/KNOWLEDGE/link.md"));
+  process.env.RECALL_ROOT = d;
+  try { const { loadCorpus } = require("./Recall"); expect(loadCorpus().map((x: any) => x.path)).toEqual(["MEMORY/KNOWLEDGE/ok.md"]); }
+  finally { delete process.env.RECALL_ROOT; rmSync(d, { recursive: true, force: true }); }
+});

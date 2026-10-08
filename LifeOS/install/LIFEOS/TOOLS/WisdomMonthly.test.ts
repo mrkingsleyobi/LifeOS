@@ -1,3 +1,4 @@
+import { symlinkSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -70,4 +71,11 @@ describe("run", () => {
     expect((await run({ now: NOW, dryRun: true, infer: async () => { called = true; return { success: true, output: "{}" }; } })).status).toBe("dry-run");
     expect(called).toBe(false);
   });
+});
+
+test("symlinks are never followed (a link to a file outside the root is not read)", () => {
+  const outside = join(dir, "..", `outside-${Date.now()}.md`); writeFileSync(outside, "TOP SECRET OUTSIDE");
+  symlinkSync(outside, join(dir, "MEMORY/LEARNING/link.md"));
+  expect(gatherLearning(NOW, 30).map(e => e.text).join()).not.toContain("TOP SECRET");
+  rmSync(outside);
 });
