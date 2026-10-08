@@ -215,3 +215,58 @@ describe("endpoints", () => {
     expect(h.channels).toEqual(["discord", "email"]);
   });
 });
+
+describe("draft delivery (blog-draft / social-post)", () => {
+  const DRAFT = { DRAFT_MODEL: "openai/gpt-6-sol", DRAFT_API_KEY: "dk", DRAFT_BASE_URL: "https://openrouter.ai/api/v1" };
+  const aiItem = (o: any = {}) => addRated({ tier: "S", q: 95, labels: ["AI"], title: "Big AI news", ...o });
+  let modelCalls: any[];
+  const f = (reply: () => Response) => (async (url: string, init: any) => {
+    if (url.includes("openrouter")) { modelCalls.push(JSON.parse(init.body)); return reply(); }
+    return fakeFetch(url, init);
+  }) as any;
+  const model = (draft: string) => () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ draft }) } }] }));
+  beforeEach(() => { modelCalls = []; });
+
+  test("without DRAFT_* nothing changes: still unsupported, no model call", async () => {
+    aiItem();
+    const r = await dispatchTick(env, NOW, f(model("x".repeat(50))));
+    expect(r.unsupported).toBe(2); expect(modelCalls).toHaveLength(0);
+  });
+  test("with DRAFT_* both destinations are drafted, labelled NOT PUBLISHED, and sent for review", async () => {
+    aiItem();
+    const r = await dispatchTick({ ...env, ...DRAFT }, NOW, f(model("A short draft about the news that is long enough.")));
+    expect(r).toMatchObject({ drafted: 2, unsupported: 0 });
+    expect(rows("SELECT destination, status FROM deliveries ORDER BY destination")).toEqual([{ destination: "blog-draft", status: "sent" }, { destination: "social-post", status: "sent" }]);
+    const msg = calls.find(c => c.url.includes("discord"))!.body.content as string;
+    expect(msg).toContain("NOT PUBLISHED"); expect(msg).toContain("DRAFT");
+    expect(modelCalls[0].provider).toEqual({ data_collection: "deny" });
+  });
+  test("model output is untrusted: links removed, mentions and link syntax defused, only the item URL survives", async () => {
+    aiItem({ url: "https://a.example/real" });
+    await dispatchTick({ ...env, ...DRAFT }, NOW, f(model("Read [this](https://evil.example/x) now @everyone and visit http://evil.example/y for a prize!")));
+    const msg = calls.find(c => c.url.includes("discord"))!.body.content as string;
+    expect(msg).not.toContain("evil.example"); expect(msg).not.toContain("](");
+    expect(msg).not.toContain("@everyone"); expect(msg).toContain("Source: https://a.example/real");
+    expect(calls.find(c => c.url.includes("discord"))!.body.allowed_mentions).toEqual({ parse: [] });
+  });
+  test("bad model output retries until the attempt cap, then fails; never sends garbage", async () => {
+    aiItem();
+    const e = { ...env, ...DRAFT };
+    for (let i = 0; i < MAX_ATTEMPTS; i++) await dispatchTick(e, NOW + i, f(() => new Response(JSON.stringify({ choices: [{ message: { content: "not json" } }] }))));
+    expect(rows("SELECT destination, status, attempts FROM deliveries ORDER BY destination")).toEqual([{ destination: "blog-draft", status: "failed", attempts: MAX_ATTEMPTS }, { destination: "social-post", status: "failed", attempts: MAX_ATTEMPTS }]);
+    expect(calls.filter(c => c.url.includes("discord"))).toHaveLength(0);
+  });
+  test("a too-short draft is rejected; drafts are capped per tick; a sent draft is never re-sent", async () => {
+    aiItem(); aiItem(); aiItem();
+    await dispatchTick({ ...env, ...DRAFT }, NOW, f(model("tiny")));
+    expect(rows("SELECT status FROM deliveries WHERE status='sent'")).toHaveLength(0);
+    calls.length = 0; modelCalls.length = 0;
+    const r = await dispatchTick({ ...env, ...DRAFT }, NOW + 1, f(model("A perfectly reasonable draft body for this item.")));
+    expect(r.drafted).toBe(3); expect(modelCalls).toHaveLength(3); // 6 queued, cap 3 per tick
+    await dispatchTick({ ...env, ...DRAFT }, NOW + 2, f(model("A perfectly reasonable draft body for this item.")));
+    await dispatchTick({ ...env, ...DRAFT }, NOW + 3, f(model("A perfectly reasonable draft body for this item.")));
+    expect(rows("SELECT status FROM deliveries WHERE status='sent'")).toHaveLength(6);
+    modelCalls.length = 0; await dispatchTick({ ...env, ...DRAFT }, NOW + 4, f(model("A perfectly reasonable draft body for this item.")));
+    expect(modelCalls).toHaveLength(0);
+  });
+});

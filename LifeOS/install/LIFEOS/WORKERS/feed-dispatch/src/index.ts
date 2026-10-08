@@ -8,7 +8,8 @@
  *   GET  /healthz
  *
  * Decides nothing itself: routing is feed-route's rules.json, imported as code (no HTTP hop).
- * Idempotent per (item, destination). What it cannot deliver (blog-draft, social-post) is recorded
+ * Idempotent per (item, destination). blog-draft / social-post become review-only DRAFTS when DRAFT_MODEL +
+ * DRAFT_API_KEY are set (nothing is ever published); otherwise, and for anything else it cannot deliver, it is recorded
  * as `unsupported`, never silently dropped. Safety valves: flagged (injection-capped) items are
  * suppressed, items rated >24h ago are skipped (a backlog must not become an alert flood), and at
  * most MAX_IMMEDIATE alerts go out per tick with one overflow summary.
@@ -16,12 +17,13 @@
 import rules from "../../feed-route/rules.json";
 import { route, type RuleSet } from "../../feed-route/src/rules";
 import { authorized, json } from "../../_shared/arbol";
+import { draftsEnabled, formatDraft, makeDraft, type DraftEnv, type DraftKind } from "./draft";
 import { channels, formatAlert, formatDigest, send, type AlertItem, type DeliverEnv } from "./deliver";
 
 interface Stmt { bind(...v: unknown[]): Stmt; run(): Promise<{ meta: { changes: number } }>; all<T = any>(): Promise<{ results: T[] }> }
-export interface Env extends DeliverEnv { DISPATCH_TOKEN: string; DB: { prepare(sql: string): Stmt } }
+export interface Env extends DeliverEnv, DraftEnv { DISPATCH_TOKEN: string; DB: { prepare(sql: string): Stmt } }
 
-export const MAX_IMMEDIATE = 5, BATCH = 50, STALE_MS = 24 * 3_600_000, MAX_ATTEMPTS = 3, DIGEST_MAX = 50;
+export const MAX_IMMEDIATE = 5, BATCH = 50, STALE_MS = 24 * 3_600_000, MAX_ATTEMPTS = 3, DIGEST_MAX = 50, MAX_DRAFTS = 3;
 
 interface Rated extends Omit<AlertItem, "labels"> { rated_at: number; flagged: number; labels: string; importance: number; novelty: number; urgency: number }
 
@@ -30,7 +32,7 @@ const upsert = (env: Env, id: string, dest: string, priority: string, status: st
     .bind(id, dest, priority, status, error ?? null, now).run();
 
 export async function dispatchTick(env: Env, now = Date.now(), fetchFn: typeof fetch = fetch) {
-  const out = { routed: 0, sent: 0, queued: 0, unsupported: 0, suppressed: 0, stale: 0, failed: 0, retried: 0, error: undefined as string | undefined };
+  const out = { routed: 0, drafted: 0, sent: 0, queued: 0, unsupported: 0, suppressed: 0, stale: 0, failed: 0, retried: 0, error: undefined as string | undefined };
   if (!channels(env).length) return { ...out, error: "no delivery channel configured" }; // consume nothing: items wait
 
   // 1. Retry earlier failed alerts (bounded attempts, last 24h).
@@ -65,6 +67,7 @@ export async function dispatchTick(env: Env, now = Date.now(), fetchFn: typeof f
       // Only the run that actually inserts the row may send: a concurrent run (cron overlap, manual POST /dispatch)
       // loses the INSERT OR IGNORE race and must not send a duplicate alert.
       else if (dest === "notify") { if ((await upsert(env, it.id, dest, rt.priority, "pending", now)).meta.changes > 0) alerts.push({ it, labels }); }
+      else if ((dest === "blog-draft" || dest === "social-post") && draftsEnabled(env)) { await upsert(env, it.id, dest, rt.priority, "queued", now); out.queued++; }
       else { await upsert(env, it.id, dest, rt.priority, "unsupported", now, "no delivery adapter for this destination"); out.unsupported++; }
     }
   }
@@ -83,6 +86,28 @@ export async function dispatchTick(env: Env, now = Date.now(), fetchFn: typeof f
       await env.DB.prepare("UPDATE deliveries SET status = ?, attempts = 1, last_error = ?, sent_at = ? WHERE item_id = ? AND destination = 'notify'")
         .bind(r.ok ? "sent" : "failed", r.error ?? null, r.ok ? now : null, it.id).run();
     if (r.ok) out.sent += overflow.length; else out.failed += overflow.length;
+  }
+
+  // 4. Drafts (only when DRAFT_MODEL + DRAFT_API_KEY are set): a few per tick, sent for review, never published.
+  if (draftsEnabled(env)) {
+    const { results: q } = await env.DB.prepare(
+      `SELECT d.item_id AS id, d.destination AS dest, d.attempts, i.title, i.url, r.summary_short, r.summary_medium, r.labels FROM deliveries d
+       JOIN items i ON i.id = d.item_id JOIN ratings r ON r.item_id = d.item_id
+       WHERE d.destination IN ('blog-draft','social-post') AND d.status = 'queued' AND d.created_at > ? ORDER BY d.created_at LIMIT ?`,
+    ).bind(now - STALE_MS, MAX_DRAFTS).all<any>();
+    for (const d of q) {
+      const item = { ...d, labels: JSON.parse(d.labels) as string[] };
+      let ok = false, error: string | undefined;
+      try {
+        const r = await send(env, formatDraft(d.dest as DraftKind, item, await makeDraft(env, d.dest as DraftKind, item, fetchFn)), fetchFn);
+        ok = r.ok; error = r.error;
+      } catch (e: any) { error = String(e?.message ?? e).slice(0, 200); }
+      const attempts = d.attempts + 1;
+      const status = ok ? "sent" : attempts >= MAX_ATTEMPTS ? "failed" : "queued"; // retry next tick until the attempt cap
+      await env.DB.prepare("UPDATE deliveries SET status = ?, attempts = ?, last_error = ?, sent_at = ? WHERE item_id = ? AND destination = ?")
+        .bind(status, attempts, error ?? null, ok ? now : null, d.id, d.dest).run();
+      if (ok) out.drafted++; else out.failed++;
+    }
   }
   return out;
 }

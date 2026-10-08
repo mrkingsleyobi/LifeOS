@@ -2,6 +2,7 @@
   // Dispatcher: rated items -> feed-route rules -> Discord / email. Shares the `feed` D1 database
   // (run feed-ingest, feed-rate, then this schema). Delivery is only as good as the channels you set.
   // Secrets: wrangler secret put DISPATCH_TOKEN | DISCORD_WEBHOOK_URL | RESEND_API_KEY | EMAIL_FROM | EMAIL_TO
+  // Optional review-only drafts: wrangler secret put DRAFT_API_KEY, plus vars DRAFT_MODEL (and DRAFT_BASE_URL, e.g. https://openrouter.ai/api/v1)
   // (set DISCORD_WEBHOOK_URL, or the three email secrets, or both; with none, nothing is consumed and items wait)
   "name": "arbol-a-feed-dispatch",
   "main": "src/index.ts",
