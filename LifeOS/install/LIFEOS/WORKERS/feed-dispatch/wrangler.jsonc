@@ -1,0 +1,13 @@
+{
+  // Dispatcher: rated items -> feed-route rules -> Discord / email. Shares the `feed` D1 database
+  // (run feed-ingest, feed-rate, then this schema). Delivery is only as good as the channels you set.
+  // Secrets: wrangler secret put DISPATCH_TOKEN | DISCORD_WEBHOOK_URL | RESEND_API_KEY | EMAIL_FROM | EMAIL_TO
+  // (set DISCORD_WEBHOOK_URL, or the three email secrets, or both; with none, nothing is consumed and items wait)
+  "name": "arbol-a-feed-dispatch",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["*/10 * * * *", "0 8 * * *", "0 8 * * 1"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "feed", "database_id": "REPLACE_WITH_D1_ID" }]
+}
