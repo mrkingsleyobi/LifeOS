@@ -88,6 +88,13 @@ export function currentModel(tier: ClaudeTier): string {
 export const CROSS_VENDOR: Record<string, string> = {
   forge: "gpt-5.6-sol",                // OpenAI (Tier-2 egress); build + audit modes
   helios: "gpt-5.6-cyber",             // OpenAI Trusted Access Program (blue+red cyber model; Tier-2 egress) — the offensive-security agent's finder; access tested + principal-approved. Lights the statusline CYBER lane (*cyber* match)
+  // ROUTER LANES (agents named for their model). IDs follow the Model Tier List display
+  // names (GPT-6 Astra / GPT-6.1 Sol / GPT-5.6 Terra / GPT-6 Luna) — NOT yet probed against
+  // `codex` ListModels; verify before first dispatch and fix the string here (one edit point).
+  astra: "gpt-6-astra",                // OpenAI (Tier-2 egress); MAX lane — hardest reasoning
+  sol: "gpt-6.1-sol",                  // OpenAI (Tier-2 egress); HIGH lane
+  terra: "gpt-5.6-terra",              // OpenAI (Tier-2 egress); MID workhorse lane
+  luna: "gpt-6-luna",                  // OpenAI (Tier-2 egress); LOW lane — bulk SDS/JD/summary work
   codexResearcher: "gpt-5.6-sol",      // OpenAI (Tier-2 egress)
   codexResearcherFast: "gpt-5.6-luna", // OpenAI (Tier-2 egress); breadth-first sweep rung
   geminiResearcher: "gemini-3.6-flash",// Google (Tier-2 egress; PUBLIC ceiling) — research lane only
@@ -102,3 +109,28 @@ export const CROSS_VENDOR: Record<string, string> = {
  * Used by the drift scanner to find pinned IDs that may be stale.
  */
 export const CLAUDE_ID_PATTERN = /claude-(opus|sonnet|haiku|fable)-\d+(?:-\d+)?(?:-\d{8})?/g;
+
+/**
+ * ROUTER LANES — the ladder a router (Jev-backed) picks from. Data only; policy lives in the
+ * Router doctrine. `rank` is intelligence (higher = more capable, slower, dearer). Anthropic
+ * lanes resolve via ClaudeTier aliases, OpenAI lanes via CROSS_VENDOR (same name as the agent).
+ * Order is the statusline model-list order.
+ */
+export interface Lane { agent: string; vendor: "anthropic" | "openai"; rank: number; ref: ClaudeTier | string }
+export const LANES: Record<string, Lane> = {
+  luna:  { agent: "Luna",  vendor: "openai",    rank: 1, ref: "luna" },
+  terra: { agent: "Terra", vendor: "openai",    rank: 2, ref: "terra" },
+  sol:   { agent: "Sol",   vendor: "openai",    rank: 3, ref: "sol" },
+  opus:  { agent: "Opus",  vendor: "anthropic", rank: 4, ref: "opus" },
+  fable: { agent: "Fable", vendor: "anthropic", rank: 5, ref: "fable" },
+  astra: { agent: "Astra", vendor: "openai",    rank: 6, ref: "astra" },
+};
+
+/** Concrete model for a lane: Anthropic → tier alias, OpenAI → CROSS_VENDOR pin. */
+export function laneModel(lane: string): string {
+  const l = LANES[lane.toLowerCase()];
+  // Non-ladder agents (helios, gemini, grok, forge…) resolve straight from their CROSS_VENDOR pin.
+  if (!l && CROSS_VENDOR[lane]) return CROSS_VENDOR[lane];
+  if (!l) throw new Error(`unknown lane '${lane}' — one of ${Object.keys(LANES).join(", ")}, or a CROSS_VENDOR key`);
+  return l.vendor === "anthropic" ? l.ref : CROSS_VENDOR[l.ref];
+}
