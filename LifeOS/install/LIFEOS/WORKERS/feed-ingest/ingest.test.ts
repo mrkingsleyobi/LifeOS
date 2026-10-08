@@ -5,7 +5,7 @@ import { join } from "node:path";
 import worker, { pollDue, type Env } from "./src/index";
 import { MAX_ERRORS, nextState } from "./src/breaker";
 import { parseFeed } from "./src/parse";
-import { pollSource } from "./src/poll";
+import { pollSource, pollWithTiers, tiersFromEnv } from "./src/poll";
 import { validateFeedUrl } from "./src/safe";
 
 const RSS = `<?xml version="1.0"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>T</title>
@@ -137,5 +137,76 @@ describe("arbol-a-feed-ingest", () => {
     const r = await pollDue(env, 1000, f);
     expect(r.newItems).toBe(2);
     expect(r.failed).toBe(1);
+  });
+});
+
+describe("fetch-tier fallback", () => {
+  const READER = "https://reader.example/fetch?u={url}";
+  const SELF = "https://proxy.example/{url}";
+  const tiers = tiersFromEnv({ READER_PROXY_URL: READER, SELF_PROXY_URL: SELF, PROXY_AUTH_TOKEN: "ptok" });
+  const FEED = "https://a.example/f?x=1&y=2";
+  const calls: { url: string; auth: string | null }[] = [];
+  const router = (direct: () => Response, reader: () => Response = () => new Response("no", { status: 500 }), self: () => Response = () => new Response("no", { status: 500 })) =>
+    (async (u: any, init: any) => {
+      const url = String(u);
+      calls.push({ url, auth: new Headers(init?.headers).get("authorization") });
+      if (url.startsWith("https://reader.example/")) return reader();
+      if (url.startsWith("https://proxy.example/")) return self();
+      return direct();
+    }) as any;
+  beforeEach(() => { calls.length = 0; });
+
+  test("direct success never touches a proxy", async () => {
+    const r = await pollWithTiers(FEED, tiers, router(() => new Response(RSS)));
+    expect(r.outcome).toBe("ok");
+    expect(r.via).toBeUndefined();
+    expect(calls).toHaveLength(1);
+  });
+  test("403 falls to the reader proxy; the URL is encoded and the token goes only to the proxy", async () => {
+    const r = await pollWithTiers(FEED, tiers, router(() => new Response("no", { status: 403 }), () => new Response(RSS)));
+    expect(r).toMatchObject({ outcome: "ok", via: "reader-proxy" });
+    expect(calls[0]).toEqual({ url: FEED, auth: null });
+    expect(calls[1]).toEqual({ url: `https://reader.example/fetch?u=${encodeURIComponent(FEED)}`, auth: "Bearer ptok" });
+  });
+  test("reader fails → self-hosted proxy; all fail → the direct error stands", async () => {
+    const ok = await pollWithTiers(FEED, tiers, router(() => new Response("no", { status: 429 }), undefined, () => new Response(RSS)));
+    expect(ok.via).toBe("self-proxy");
+    calls.length = 0;
+    const bad = await pollWithTiers(FEED, tiers, router(() => new Response("no", { status: 429 })));
+    expect(bad).toMatchObject({ outcome: "http_error", status: 429 });
+    expect(calls).toHaveLength(3);
+  });
+  test("an empty 200 triggers the tiers; 404 and network errors do not", async () => {
+    expect((await pollWithTiers(FEED, tiers, router(() => new Response("<html/>"), () => new Response(RSS)))).via).toBe("reader-proxy");
+    calls.length = 0;
+    await pollWithTiers(FEED, tiers, router(() => new Response("gone", { status: 404 })));
+    await pollWithTiers(FEED, tiers, router(() => { throw new Error("dns"); }));
+    expect(calls).toHaveLength(2);
+  });
+  test("a feed URL that fails SSRF validation is never handed to a proxy", async () => {
+    const r = await pollWithTiers("https://127.0.0.1/f", tiers, router(() => new Response(RSS)));
+    expect(r.outcome).toBe("blocked");
+    expect(calls).toHaveLength(0);
+  });
+  test("invalid templates are ignored (http, no {url}, credentials, junk)", () => {
+    expect(tiersFromEnv({ READER_PROXY_URL: "http://r.example/{url}", SELF_PROXY_URL: "https://r.example/fixed" })).toEqual([]);
+    expect(tiersFromEnv({ READER_PROXY_URL: "https://u:p@r.example/{url}", SELF_PROXY_URL: "not a url {url}" })).toEqual([]);
+    expect(tiersFromEnv({})).toEqual([]);
+  });
+  test("a proxy that redirects off https is refused", async () => {
+    const f = (async (u: any) => {
+      const url = String(u);
+      if (!url.startsWith("https://reader.example/")) return new Response("no", { status: 403 });
+      const r = new Response(RSS); Object.defineProperty(r, "url", { value: "http://evil.example/x" }); return r;
+    }) as any;
+    expect((await pollWithTiers(FEED, tiers, f)).outcome).toBe("http_error");
+  });
+  test("pollDue records last_status 'ok+reader-proxy' and resets the error count", async () => {
+    await post("/sources", { url: "https://a.example/f" });
+    db.exec("UPDATE sources SET error_count = 3");
+    const f = feedFetch({ "https://a.example/f": () => new Response("no", { status: 403 }), "https://reader.example/fetch?u=https%3A%2F%2Fa.example%2Ff": () => new Response(RSS) });
+    const r = await pollDue({ ...env, READER_PROXY_URL: READER } as Env, 1000, f);
+    expect(r).toMatchObject({ polled: 1, newItems: 2, failed: 0 });
+    expect(one("SELECT last_status, error_count FROM sources")).toEqual({ last_status: "ok+reader-proxy", error_count: 0 });
   });
 });

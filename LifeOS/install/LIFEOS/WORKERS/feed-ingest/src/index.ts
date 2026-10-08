@@ -7,15 +7,16 @@
  *   scheduled()    cron trigger → same as POST /poll
  *
  * Ingest only. Summarize/rate/deliver are separate stages (feed-route consumes rated items).
- * Fetch-tier fallback (direct → reader proxy → self-hosted proxy) is NOT built.
+ * Fetch tiers: direct first; on 401/403/429/503 or an empty body, optional READER_PROXY_URL then
+ * SELF_PROXY_URL (https templates containing {url}; bearer PROXY_AUTH_TOKEN sent to proxies only).
  */
 import { authorized, json, readJson, sha256Hex } from "../../_shared/arbol";
 import { nextState } from "./breaker";
-import { pollSource } from "./poll";
+import { pollWithTiers, tiersFromEnv } from "./poll";
 import { validateFeedUrl } from "./safe";
 
 interface Stmt { bind(...v: unknown[]): Stmt; run(): Promise<{ meta: { changes: number } }>; all<T = any>(): Promise<{ results: T[] }> }
-export interface Env { INGEST_TOKEN: string; DB: { prepare(sql: string): Stmt } }
+export interface Env { INGEST_TOKEN: string; READER_PROXY_URL?: string; SELF_PROXY_URL?: string; PROXY_AUTH_TOKEN?: string; DB: { prepare(sql: string): Stmt } }
 interface Source { id: number; url: string; interval_min: number; error_count: number }
 
 const BATCH = 10;
@@ -26,10 +27,11 @@ export async function pollDue(env: Env, nowMs = Date.now(), fetchFn: typeof fetc
     "SELECT id, url, interval_min, error_count FROM sources WHERE disabled = 0 AND next_poll_at <= ? ORDER BY next_poll_at LIMIT ?",
   ).bind(nowMs, BATCH).all<Source>();
 
+  const tiers = tiersFromEnv(env);
   const summary = { polled: 0, newItems: 0, failed: 0, disabled: 0 };
   await Promise.all(results.map(async (src) => {
     try {
-      const { outcome, items } = await pollSource(src.url, fetchFn);
+      const { outcome, items, via } = await pollWithTiers(src.url, tiers, fetchFn);
       for (const it of items) {
         const id = (await sha256Hex(`${src.id}\n${it.guid}`)).slice(0, 32);
         const r = await env.DB.prepare(
@@ -37,7 +39,7 @@ export async function pollDue(env: Env, nowMs = Date.now(), fetchFn: typeof fetc
         ).bind(id, src.id, it.guid, it.url ?? null, it.title ?? null, it.author ?? null, it.published ?? null, it.summary ?? null, nowMs).run();
         summary.newItems += r.meta.changes;
       }
-      const n = nextState(src, outcome, nowMs);
+      const n = nextState(src, outcome, nowMs, via);
       await env.DB.prepare("UPDATE sources SET error_count = ?, disabled = ?, next_poll_at = ?, last_status = ?, last_polled_at = ? WHERE id = ?")
         .bind(n.error_count, n.disabled, n.next_poll_at, n.last_status, nowMs, src.id).run();
       summary.polled++;
