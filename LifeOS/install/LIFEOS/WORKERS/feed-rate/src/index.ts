@@ -32,8 +32,11 @@ export async function rateBatch(env: Env, nowMs = Date.now(), fetchFn: typeof fe
   ).bind(RUBRIC_VERSION, MAX_ATTEMPTS, BATCH).all<Pending>();
 
   await Promise.all(results.map(async (item) => {
+    // Provider trouble (timeout, 429, 5xx, bad key) is not the item's fault: retry next tick without counting it
+    // toward the poison-item cap. Only unusable model OUTPUT counts.
+    let text: string;
+    try { text = await callModel(env, SYSTEM_PROMPT, buildUserPrompt(item), fetchFn); } catch { summary.failed++; return; }
     try {
-      const text = await callModel(env, SYSTEM_PROMPT, buildUserPrompt(item), fetchFn);
       const valid = validateRating(extractJson(text));
       if (!valid) throw new Error("invalid rating output");
       const flagged = looksInjected(item);
@@ -65,13 +68,16 @@ export default {
     if (!authorized(req, env.RATE_TOKEN)) return json({ error: "unauthorized" }, 401);
     if (isRate) return json(await rateBatch(env));
 
-    const since = Number(url.searchParams.get("since") ?? 0) || 0;
+    // Keyset cursor (rated_at, item_id): a whole batch shares one rated_at, so rated_at alone would skip rows at a page edge.
+    const since = Number(url.searchParams.get("since") ?? 0) || 0, sinceId = url.searchParams.get("since_id"); // without since_id the old strict `rated_at > since` meaning is kept
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 100) || 100, 1), 200);
     const { results } = await env.DB.prepare(
       `SELECT r.item_id AS id, r.tier, r.quality_score, r.importance, r.novelty, r.urgency, r.labels, r.flagged, r.rated_at, i.title, i.url
-       FROM ratings r JOIN items i ON i.id = r.item_id WHERE r.rated_at > ? ORDER BY r.rated_at LIMIT ?`,
-    ).bind(since, limit).all<any>();
-    return json({ items: results.map((x) => ({ ...x, labels: JSON.parse(x.labels), flagged: !!x.flagged })) });
+       FROM ratings r JOIN items i ON i.id = r.item_id
+       WHERE r.version = ? AND (r.rated_at > ? OR (? IS NOT NULL AND r.rated_at = ? AND r.item_id > ?)) ORDER BY r.rated_at, r.item_id LIMIT ?`,
+    ).bind(RUBRIC_VERSION, since, sinceId, since, sinceId ?? "", limit).all<any>();
+    const last = results.at(-1);
+    return json({ items: results.map((x) => ({ ...x, labels: JSON.parse(x.labels), flagged: !!x.flagged })), next: last ? { since: last.rated_at, since_id: last.id } : null });
   },
 
   async scheduled(_e: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {

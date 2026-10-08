@@ -66,6 +66,14 @@ describe("provider wire formats", () => {
     expect(c.init.headers).toMatchObject({ "x-api-key": "k", "anthropic-version": "2023-06-01" });
     expect(b).toMatchObject({ model: "m2", system: "SYS", messages: [{ role: "user", content: "USR" }] });
   });
+  test("anthropic: the key is never sent to a non-Anthropic base URL (e.g. the OpenRouter default in wrangler vars)", async () => {
+    const { c, f } = capture();
+    await callModel({ RATER_PROVIDER: "anthropic", RATER_MODEL: "m", RATER_API_KEY: "k", RATER_BASE_URL: "https://openrouter.ai/api/v1" }, "S", "U", f);
+    expect(c.url).toBe("https://api.anthropic.com/v1/messages");
+    const { c: c2, f: f2 } = capture();
+    await callModel({ RATER_PROVIDER: "anthropic", RATER_MODEL: "m", RATER_API_KEY: "k", RATER_BASE_URL: "http://api.anthropic.com" }, "S", "U", f2);
+    expect(c2.url.startsWith("https://api.anthropic.com/")).toBe(true);
+  });
   test("openrouter base URL asks for no-retention providers; plain OpenAI does not", async () => {
     const bodies: any[] = [];
     const f = (async (_u: string, init: any) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] })); }) as any;
@@ -170,5 +178,27 @@ describe("arbol-a-feed-rate endpoints", () => {
     await rateBatch(env, 5000, modelReturning(good));
     const item = ((await (await authed("/rated")).json()) as any).items[0];
     expect(route(item, rules as RuleSet)).toMatchObject({ rule: "Critical security", priority: "immediate", destinations: ["notify"] });
+  });
+});
+
+describe("review fixes", () => {
+  test("provider errors (429/5xx/timeouts) never count toward the poison-item cap", async () => {
+    addItem("a");
+    const down = (async () => new Response("slow down", { status: 429 })) as any;
+    for (let i = 0; i < MAX_ATTEMPTS + 2; i++) await rateBatch(env, 5000 + i, down);
+    expect(one("SELECT count(*) AS n FROM rate_failures").n).toBe(0);
+    expect((await rateBatch(env, 9000, modelReturning(good))).rated).toBe(1); // recovers once the provider does
+  });
+  test("/rated pages through a batch that shares one rated_at without skipping rows", async () => {
+    for (const id of ["a", "b", "c", "d", "e"]) addItem(id);
+    await rateBatch(env, 5000, modelReturning(good));
+    const seen: string[] = []; let q = "since=0&limit=2";
+    for (let i = 0; i < 6; i++) {
+      const r = (await (await authed(`/rated?${q}`)).json()) as any;
+      seen.push(...r.items.map((x: any) => x.id));
+      if (!r.next || !r.items.length) break;
+      q = `since=${r.next.since}&since_id=${r.next.since_id}&limit=2`;
+    }
+    expect(seen.sort()).toEqual(["a", "b", "c", "d", "e"]);
   });
 });

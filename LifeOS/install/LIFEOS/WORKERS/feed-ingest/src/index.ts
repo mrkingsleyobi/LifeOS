@@ -45,7 +45,17 @@ export async function pollDue(env: Env, nowMs = Date.now(), fetchFn: typeof fetc
       summary.polled++;
       if (outcome !== "ok") summary.failed++;
       if (n.disabled) summary.disabled++;
-    } catch { summary.failed++; } // one bad source must never stop the batch
+    } catch {
+      // One bad source must never stop the batch, and must not stay "due" forever (it would sort first every tick and
+      // starve healthy sources): record it as a failure so it backs off and eventually auto-disables.
+      summary.failed++;
+      try {
+        const n = nextState(src, "network_error", nowMs);
+        await env.DB.prepare("UPDATE sources SET error_count = ?, disabled = ?, next_poll_at = ?, last_status = ?, last_polled_at = ? WHERE id = ?")
+          .bind(n.error_count, n.disabled, n.next_poll_at, "internal_error", nowMs, src.id).run();
+        if (n.disabled) summary.disabled++;
+      } catch { /* the database itself is down; the next tick retries */ }
+    }
   }));
   return summary;
 }

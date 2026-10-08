@@ -14,7 +14,11 @@ export async function callModel(env: ProviderEnv, system: string, user: string, 
     // Claude Haiku 5.5 ("claude-haiku-5-5"): thinking is on by default and counts toward max_tokens, so leave
     // headroom and drop effort to "low" for this simple rating task. Sampling params are NOT sent (non-default
     // values 400 on this model) and there is no assistant prefill. Refusals have no server-side fallback here.
-    const res = await fetchFn(`${env.RATER_BASE_URL ?? "https://api.anthropic.com"}/v1/messages`, {
+    // Never send the Anthropic key to a non-Anthropic host: wrangler.jsonc pins RATER_BASE_URL to OpenRouter, so changing only
+    // RATER_PROVIDER would otherwise post x-api-key there.
+    let base = "https://api.anthropic.com";
+    try { const u = new URL(env.RATER_BASE_URL ?? ""); if (u.protocol === "https:" && (u.hostname === "anthropic.com" || u.hostname.endsWith(".anthropic.com"))) base = u.origin; } catch { /* default */ }
+    const res = await fetchFn(`${base}/v1/messages`, {
       method: "POST", signal,
       headers: { "x-api-key": env.RATER_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({ model: env.RATER_MODEL, max_tokens: 2000, output_config: { effort: "low" }, system, messages: [{ role: "user", content: user }] }),
