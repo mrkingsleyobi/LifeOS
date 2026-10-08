@@ -99,6 +99,9 @@ export const OPENAI_LANES = ['forge', 'luna', 'terra', 'astra', 'cyber'] as cons
 export type OpenAILane = (typeof OPENAI_LANES)[number];
 const zeroLanes = (): Record<OpenAILane, number> => ({ forge: 0, luna: 0, terra: 0, astra: 0, cyber: 0 });
 
+/** Dispatched agent name → lane (anything else OpenAI, e.g. Sol/Forge, is the SOL bucket). */
+const AGENT_LANE: Record<string, OpenAILane> = { luna: 'luna', terra: 'terra', astra: 'astra', helios: 'cyber', cyber: 'cyber' };
+
 /** Rollout model id → lane. Matches the lane NAME inside the id (gpt-6-luna → luna) so a version bump needs no edit. */
 export function laneForOpenAIModel(model: string): OpenAILane | null {
   const m = (model || '').toLowerCase();
@@ -120,6 +123,8 @@ export interface Mix {
   lanePct: Record<OpenAILane, number>;
   total: number;
   crossVendor: boolean;
+  /** True only when a dispatch landed in the SOL (forge) bucket. A Luna/Terra/Astra/Helios-only session must not light SOL. */
+  forgeUsed: boolean;
   unknownModels: string[];
 }
 
@@ -273,7 +278,7 @@ const WINDOW_SLOP_MS = 120_000;
 const codexSessionsDir = () =>
   process.env.CODEX_SESSIONS_DIR || join(HOME, '.codex', 'sessions');
 
-interface CrossVendorUsage { used: boolean; byLane: Record<OpenAILane, number> }
+interface CrossVendorUsage { used: boolean; forgeUsed: boolean; byLane: Record<OpenAILane, number> }
 
 /**
  * Cross-vendor work is invisible to transcripts. The USED flag comes from the
@@ -282,8 +287,8 @@ interface CrossVendorUsage { used: boolean; byLane: Record<OpenAILane, number> }
  * (the transcripts never capture the codex session id).
  */
 function crossVendorUsage(subagentDir: string): CrossVendorUsage {
-  if (!existsSync(subagentDir)) return { used: false, byLane: zeroLanes() };
-  let used = false;
+  if (!existsSync(subagentDir)) return { used: false, forgeUsed: false, byLane: zeroLanes() };
+  let used = false, forgeUsed = false;
   const windows: Array<[number, number]> = [];
   for (const f of readdirSync(subagentDir)) {
     if (!f.endsWith('.meta.json')) continue;
@@ -294,14 +299,16 @@ function crossVendorUsage(subagentDir: string): CrossVendorUsage {
       if (!OPENAI_CV_AGENTS.has(type) && !OPENAI_CV_AGENTS.has(custom)
           && !String(meta?.model ?? '').toLowerCase().startsWith('gpt-')) continue;
       used = true;
+      const agentLane = AGENT_LANE[type] ?? AGENT_LANE[custom] ?? laneForOpenAIModel(String(meta?.model ?? '')) ?? 'forge';
+      if (agentLane === 'forge') forgeUsed = true;
       const transcript = join(subagentDir, f.replace(/\.meta\.json$/, '.jsonl'));
       if (!existsSync(transcript)) continue;
       const st = statSync(transcript);
       windows.push([(st.birthtimeMs || st.mtimeMs) - WINDOW_SLOP_MS, st.mtimeMs + WINDOW_SLOP_MS]);
     } catch { /* unreadable meta is not evidence of anything */ }
   }
-  if (windows.length === 0) return { used, byLane: zeroLanes() };
-  return { used, byLane: rolloutTokensIn(windows) };
+  if (windows.length === 0) return { used, forgeUsed, byLane: zeroLanes() };
+  return { used, forgeUsed, byLane: rolloutTokensIn(windows) };
 }
 
 /**
@@ -406,7 +413,7 @@ function pruneState(dir: string): void {
 }
 
 export function computeMix(sessionId: string, transcriptOverride?: string): Mix {
-  const empty: Mix = { tokens: zero(), calls: zero(), pct: zero(), forgeTokens: 0, forgePct: 0, laneTokens: zeroLanes(), lanePct: zeroLanes(), total: 0, crossVendor: false, unknownModels: [] };
+  const empty: Mix = { tokens: zero(), calls: zero(), pct: zero(), forgeTokens: 0, forgePct: 0, laneTokens: zeroLanes(), lanePct: zeroLanes(), total: 0, crossVendor: false, forgeUsed: false, unknownModels: [] };
   const main = transcriptOverride ?? findTranscript(sessionId);
   if (!main || !existsSync(main)) return empty;
 
@@ -450,6 +457,7 @@ export function computeMix(sessionId: string, transcriptOverride?: string): Mix 
     lanePct,
     total: RUNGS.reduce((s, r) => s + state.tokens[r], 0) + OPENAI_LANES.reduce((s, l) => s + cv.byLane[l], 0),
     crossVendor: cv.used,
+    forgeUsed: cv.forgeUsed,
     unknownModels: state.unknownModels,
   };
 }
@@ -476,6 +484,6 @@ if (import.meta.main) {
     // dispatch still lights the rung.
     const out = RUNGS.map(r => `mix_${r}=${mix.pct[r]}`).join('\n');
     const lanes = OPENAI_LANES.filter(l => l !== 'forge').map(l => `mix_${l}=${mix.lanePct[l]}`).join('\n');
-    console.log(`${out}\n${lanes}\nmix_total=${mix.total}\nmix_forge=${mix.forgePct}\nmix_forge_used=${mix.crossVendor ? 1 : 0}`);
+    console.log(`${out}\n${lanes}\nmix_total=${mix.total}\nmix_forge=${mix.forgePct}\nmix_forge_used=${mix.forgeUsed ? 1 : 0}`);
   }
 }
