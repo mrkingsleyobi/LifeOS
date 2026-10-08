@@ -1,9 +1,6 @@
 /**
  * JevCore — the Jev wire call with no node imports (shared by the CLI/hook and the Worker).
- * Wire format follows Vercel AI Gateway's documented evaluate endpoint:
- *   POST {base}/v1/evaluate  { model:"typesafe-ai/jev", state, questions:{name:{type:"boolean",instructions}} }
- *   -> answers[name].probability
- * NOT yet exercised against a live key from this repo — the first shadow run is the test.
+ * See `evaluate` for the two wire flavors. NOT confirmed live from this repo.
  */
 import type { Probs } from "./Policy";
 
@@ -21,15 +18,26 @@ export const QUESTIONS: Record<string, string> = {
   containsSensitiveOrPrivateData: "Does the text contain personal, confidential, financial, health, or credential information?",
 };
 
-export async function evaluate(key: string, base: string, redactedPrompt: string, timeoutMs: number): Promise<Probs | null> {
+/**
+ * Two documented flavors of the same model:
+ *  - "native":  POST https://api.typesafe.ai/v1/systemone, model "jev-latest", question type "noul", answer at .noul
+ *  - "gateway": POST https://ai-gateway.vercel.sh/v1/evaluate, model "typesafe-ai/jev", type "boolean", answer at .probability
+ * The native flavor is taken from third-party write-ups (TypeSafe's own API reference was not retrieved) and a
+ * live call with the account's key returned 401, so neither flavor is confirmed from this repo.
+ */
+export type Flavor = "native" | "gateway";
+export const DEFAULT_BASE: Record<Flavor, string> = { native: "https://api.typesafe.ai", gateway: "https://ai-gateway.vercel.sh" };
+
+export async function evaluate(key: string, base: string, redactedPrompt: string, timeoutMs: number, flavor: Flavor = "gateway"): Promise<Probs | null> {
+  const native = flavor === "native";
   const questions = Object.fromEntries(
-    Object.entries(QUESTIONS).map(([k, instructions]) => [k, { type: "boolean", instructions }]),
+    Object.entries(QUESTIONS).map(([k, instructions]) => [k, { type: native ? "noul" : "boolean", instructions }]),
   );
   try {
-    const res = await fetch(`${base}/v1/evaluate`, {
+    const res = await fetch(`${base}${native ? "/v1/systemone" : "/v1/evaluate"}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "typesafe-ai/jev", state: redactedPrompt, questions }),
+      body: JSON.stringify({ model: native ? "jev-latest" : "typesafe-ai/jev", state: redactedPrompt, questions }),
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return null;
@@ -37,7 +45,7 @@ export async function evaluate(key: string, base: string, redactedPrompt: string
     const out: Probs = {};
     for (const k of Object.keys(QUESTIONS)) {
       const a = answers[k];
-      const p = Number(a?.probability ?? a?.noul);
+      const p = Number(native ? a?.noul ?? a?.probability : a?.probability ?? a?.noul);
       if (!Number.isFinite(p)) return null; // incomplete answer -> caller falls back, never half-trusts
       out[k] = Math.max(0, Math.min(1, p));
     }

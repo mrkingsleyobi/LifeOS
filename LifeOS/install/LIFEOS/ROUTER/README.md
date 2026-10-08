@@ -47,12 +47,16 @@ export ROUTER_WORKER_TOKEN=<same token>
 
 Status: unit-tested with a mocked Jev, bundles to ~9 KB with no node imports, typechecks. **Not deployed** — no Cloudflare credentials in this session.
 
+## Verification status
+Checked live on 2026-10-08 with the account's own credentials (read-only):
+- **OpenAI lane IDs: confirmed.** `gpt-6-astra`, `gpt-6.1-sol`, `gpt-5.6-terra`, `gpt-6-luna` all appear in the account's `GET /v1/models`. (`gpt-5.6-cyber`, the Helios pin, does **not** appear; it is a Trusted Access model that may be hidden from the list.)
+- **Jev: still unconfirmed.** The client now supports both the native TypeSafe API (`TYPESAFE_API_KEY`, `/v1/systemone`, `noul`) and the Vercel gateway (`AI_GATEWAY_API_KEY`, `/v1/evaluate`, `boolean`). A single live call to the native endpoint with the account's `TYPESAFE_API_KEY` returned **401 authentication_error**. The key may be invalid or expired, may belong to a different service, or the account may be restricted; check it in the TypeSafe console. Until a call succeeds every decision is `source: heuristic`.
+
 ## Not verified yet — read before enabling anything
-1. **Jev wire format** follows Vercel AI Gateway's documented `/v1/evaluate`; never run live from here. Needs `AI_GATEWAY_API_KEY`. Until set, every decision is `source: heuristic`.
+1. **Jev**: see above. The native request shape comes from third-party write-ups, not TypeSafe's own API reference.
 2. **OmniRoute combo schema** comes from one third-party article. Verify field names and provider slugs against your OmniRoute version, then import `omniroute/combos.json`.
-3. **OpenAI model IDs** are from the tier-list names, unprobed against `codex`.
-4. **Enforcement is dispatch-time only.** A hook cannot change the main-loop model. Moving from shadow to enforce means the Algorithm dispatching `Agent(<Lane>)` per the decision, not the hook.
-5. **Weights are a first guess.** Compare `Router.ts audit` to what you actually needed, then tune `lanes.json`.
-6. **Anthropic traffic is not routed through OmniRoute** (subscription terms); only the OpenAI lanes are.
+3. **Enforcement is dispatch-time only.** A hook cannot change the main-loop model. Moving from shadow to enforce means the Algorithm dispatching `Agent(<Lane>)` per the decision, not the hook.
+4. **Weights are a first guess.** Compare `Router.ts audit` to what you actually needed, then tune `lanes.json`.
+5. **Anthropic traffic is not routed through OmniRoute** (subscription terms); only the OpenAI lanes are.
 
 Tests: `bun test` in this directory.

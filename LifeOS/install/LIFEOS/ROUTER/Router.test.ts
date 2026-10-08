@@ -55,3 +55,36 @@ describe("privacy lane", () => {
     expect(r).not.toMatch(/bob@|555|x\.io/);
   });
 });
+
+import { afterEach } from "bun:test";
+import { evaluate, QUESTIONS } from "./JevCore";
+
+describe("Jev wire flavors", () => {
+  const real = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = real; });
+  const answersWith = (field: string, p: number) => ({ answers: Object.fromEntries(Object.keys(QUESTIONS).map((k) => [k, { [field]: p }])) });
+  const capture = (resp: unknown) => { const c: { url?: string; body?: any } = {}; globalThis.fetch = (async (u: string, init: any) => { c.url = u; c.body = JSON.parse(init.body); return new Response(JSON.stringify(resp)); }) as any; return c; };
+
+  test("native: systemone, jev-latest, noul questions, reads .noul", async () => {
+    const c = capture(answersWith("noul", 0.3));
+    const p = await evaluate("k", "https://api.typesafe.ai", "hello", 1000, "native");
+    expect(c.url).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(c.body.model).toBe("jev-latest");
+    expect(Object.values(c.body.questions as Record<string, any>).every((q) => q.type === "noul")).toBe(true);
+    expect(p!.needsDeepReasoning).toBe(0.3);
+  });
+  test("gateway: evaluate, typesafe-ai/jev, boolean questions, reads .probability", async () => {
+    const c = capture(answersWith("probability", 0.8));
+    const p = await evaluate("k", "https://ai-gateway.vercel.sh", "hello", 1000, "gateway");
+    expect(c.url).toBe("https://ai-gateway.vercel.sh/v1/evaluate");
+    expect(c.body.model).toBe("typesafe-ai/jev");
+    expect(Object.values(c.body.questions as Record<string, any>).every((q) => q.type === "boolean")).toBe(true);
+    expect(p!.needsDeepReasoning).toBe(0.8);
+  });
+  test("a 401 or an incomplete answer returns null so the router falls back to the heuristic", async () => {
+    globalThis.fetch = (async () => new Response("{}", { status: 401 })) as any;
+    expect(await evaluate("bad", "https://api.typesafe.ai", "x", 1000, "native")).toBeNull();
+    capture({ answers: { needsDeepReasoning: { noul: 0.5 } } });
+    expect(await evaluate("k", "https://api.typesafe.ai", "x", 1000, "native")).toBeNull();
+  });
+});

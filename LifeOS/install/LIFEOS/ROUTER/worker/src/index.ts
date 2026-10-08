@@ -13,9 +13,9 @@
  */
 import cfg from "../../lanes.json";
 import { decide, heuristicProbs, privacyGate, privateDecision, redact, type LanesConfig } from "../../Policy";
-import { evaluate } from "../../JevCore";
+import { DEFAULT_BASE, evaluate } from "../../JevCore";
 
-export interface Env { ROUTER_TOKEN: string; AI_GATEWAY_API_KEY?: string; JEV_BASE_URL?: string }
+export interface Env { ROUTER_TOKEN: string; TYPESAFE_API_KEY?: string; AI_GATEWAY_API_KEY?: string; JEV_BASE_URL?: string }
 
 const MAX_BODY = 32 * 1024;
 const DEPTH = /\b(think (deeply|hard)|ultrathink|deep(ly)? analy[sz]e)\b/i;
@@ -60,9 +60,9 @@ export default {
     if (gate) {
       decision = privateDecision(gate, c);
     } else {
-      const probs = env.AI_GATEWAY_API_KEY
-        ? await evaluate(env.AI_GATEWAY_API_KEY, env.JEV_BASE_URL ?? "https://ai-gateway.vercel.sh", redact(prompt), c.jev.timeoutMs)
-        : null;
+      const flavor = env.TYPESAFE_API_KEY ? "native" : "gateway";
+      const key = env.TYPESAFE_API_KEY ?? env.AI_GATEWAY_API_KEY;
+      const probs = key ? await evaluate(key, env.JEV_BASE_URL ?? DEFAULT_BASE[flavor], redact(prompt), c.jev.timeoutMs, flavor) : null;
       decision = decide(probs ?? heuristicProbs(prompt, facts), facts, probs ? "jev" : "heuristic", c);
     }
     const out = { ...decision, latencyMs: Date.now() - t0 };

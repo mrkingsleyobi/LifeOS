@@ -88,9 +88,10 @@ export function currentModel(tier: ClaudeTier): string {
 export const CROSS_VENDOR: Record<string, string> = {
   forge: "gpt-5.6-sol",                // OpenAI (Tier-2 egress); build + audit modes
   helios: "gpt-5.6-cyber",             // OpenAI Trusted Access Program (blue+red cyber model; Tier-2 egress) — the offensive-security agent's finder; access tested + principal-approved. Lights the statusline CYBER lane (*cyber* match)
-  // ROUTER LANES (agents named for their model). IDs follow the Model Tier List display
-  // names (GPT-6 Astra / GPT-6.1 Sol / GPT-5.6 Terra / GPT-6 Luna) — NOT yet probed against
-  // `codex` ListModels; verify before first dispatch and fix the string here (one edit point).
+  // ROUTER LANES (agents named for their model). IDs follow the Model Tier List display names
+  // (GPT-6 Astra / GPT-6.1 Sol / GPT-5.6 Terra / GPT-6 Luna) and were confirmed present in the
+  // account's OpenAI model list (GET /v1/models) on 2026-10-08. Presence in that list is not proof
+  // that `codex exec` accepts them; fix the string here (one edit point) if a dispatch is refused.
   astra: "gpt-6-astra",                // OpenAI (Tier-2 egress); MAX lane — hardest reasoning
   sol: "gpt-6.1-sol",                  // OpenAI (Tier-2 egress); HIGH lane
   terra: "gpt-5.6-terra",              // OpenAI (Tier-2 egress); MID workhorse lane
