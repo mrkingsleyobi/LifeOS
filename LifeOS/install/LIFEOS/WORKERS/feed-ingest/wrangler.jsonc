@@ -1,0 +1,13 @@
+{
+  // Arbol-style Flow-like Worker: cron-driven poller (name kept as an action: it is stateless between runs).
+  // wrangler d1 create feed → paste id → wrangler d1 execute feed --remote --file=schema.sql
+  // Secret: wrangler secret put INGEST_TOKEN
+  // Optional fetch tiers (secrets/vars, none by default): READER_PROXY_URL, SELF_PROXY_URL (https, contain {url}), PROXY_AUTH_TOKEN
+  "name": "arbol-a-feed-ingest",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "feed", "database_id": "REPLACE_WITH_D1_ID" }]
+}

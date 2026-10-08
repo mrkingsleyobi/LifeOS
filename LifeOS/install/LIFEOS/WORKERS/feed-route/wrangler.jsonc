@@ -1,0 +1,9 @@
+{
+  // Arbol-style Action Worker (A_FEED_ROUTE). Stateless; rules ship in rules.json.
+  // Secret: wrangler secret put FEED_TOKEN
+  "name": "arbol-a-feed-route",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true }
+}

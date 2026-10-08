@@ -91,16 +91,40 @@ const OPENAI_CV_AGENTS = new Set(
   Object.keys(CROSS_VENDOR).filter(k => CROSS_VENDOR[k].startsWith('gpt-')).map(k => k.toLowerCase())
 );
 
+/**
+ * OpenAI lanes measured from codex rollouts. `forge` is the SOL bucket and also the catch-all for any other gpt-* model
+ * (unchanged from before per-lane attribution); luna/terra/astra/cyber are attributed by the model named in the rollout.
+ */
+export const OPENAI_LANES = ['forge', 'luna', 'terra', 'astra', 'cyber'] as const;
+export type OpenAILane = (typeof OPENAI_LANES)[number];
+const zeroLanes = (): Record<OpenAILane, number> => ({ forge: 0, luna: 0, terra: 0, astra: 0, cyber: 0 });
+
+/** Dispatched agent name → lane (anything else OpenAI, e.g. Sol/Forge, is the SOL bucket). */
+const AGENT_LANE: Record<string, OpenAILane> = { luna: 'luna', terra: 'terra', astra: 'astra', helios: 'cyber', cyber: 'cyber' };
+
+/** Rollout model id → lane. Matches the lane NAME inside the id (gpt-6-luna → luna) so a version bump needs no edit. */
+export function laneForOpenAIModel(model: string): OpenAILane | null {
+  const m = (model || '').toLowerCase();
+  if (!m.startsWith('gpt-')) return null;
+  for (const lane of ['luna', 'terra', 'astra', 'cyber'] as const) if (m.includes(lane)) return lane;
+  return 'forge';
+}
+
 export interface Mix {
   tokens: Record<EffortLevel, number>;
   calls: Record<EffortLevel, number>;
   pct: Record<EffortLevel, number>;
-  /** OpenAI output tokens measured from attributed codex rollouts. */
+  /** OpenAI output tokens in the SOL (forge) bucket, measured from attributed codex rollouts. */
   forgeTokens: number;
-  /** Forge's share of the SAME denominator as pct — all five sum to 100. */
+  /** Forge's share of the SAME denominator as pct — all buckets sum to 100. */
   forgePct: number;
+  /** Per-lane OpenAI output tokens and shares (forge is the same number as forgeTokens/forgePct). */
+  laneTokens: Record<OpenAILane, number>;
+  lanePct: Record<OpenAILane, number>;
   total: number;
   crossVendor: boolean;
+  /** True only when a dispatch landed in the SOL (forge) bucket. A Luna/Terra/Astra/Helios-only session must not light SOL. */
+  forgeUsed: boolean;
   unknownModels: string[];
 }
 
@@ -254,7 +278,7 @@ const WINDOW_SLOP_MS = 120_000;
 const codexSessionsDir = () =>
   process.env.CODEX_SESSIONS_DIR || join(HOME, '.codex', 'sessions');
 
-interface CrossVendorUsage { used: boolean; outputTokens: number }
+interface CrossVendorUsage { used: boolean; forgeUsed: boolean; byLane: Record<OpenAILane, number> }
 
 /**
  * Cross-vendor work is invisible to transcripts. The USED flag comes from the
@@ -263,8 +287,8 @@ interface CrossVendorUsage { used: boolean; outputTokens: number }
  * (the transcripts never capture the codex session id).
  */
 function crossVendorUsage(subagentDir: string): CrossVendorUsage {
-  if (!existsSync(subagentDir)) return { used: false, outputTokens: 0 };
-  let used = false;
+  if (!existsSync(subagentDir)) return { used: false, forgeUsed: false, byLane: zeroLanes() };
+  let used = false, forgeUsed = false;
   const windows: Array<[number, number]> = [];
   for (const f of readdirSync(subagentDir)) {
     if (!f.endsWith('.meta.json')) continue;
@@ -275,14 +299,16 @@ function crossVendorUsage(subagentDir: string): CrossVendorUsage {
       if (!OPENAI_CV_AGENTS.has(type) && !OPENAI_CV_AGENTS.has(custom)
           && !String(meta?.model ?? '').toLowerCase().startsWith('gpt-')) continue;
       used = true;
+      const agentLane = AGENT_LANE[type] ?? AGENT_LANE[custom] ?? laneForOpenAIModel(String(meta?.model ?? '')) ?? 'forge';
+      if (agentLane === 'forge') forgeUsed = true;
       const transcript = join(subagentDir, f.replace(/\.meta\.json$/, '.jsonl'));
       if (!existsSync(transcript)) continue;
       const st = statSync(transcript);
       windows.push([(st.birthtimeMs || st.mtimeMs) - WINDOW_SLOP_MS, st.mtimeMs + WINDOW_SLOP_MS]);
     } catch { /* unreadable meta is not evidence of anything */ }
   }
-  if (windows.length === 0) return { used, outputTokens: 0 };
-  return { used, outputTokens: rolloutTokensIn(windows) };
+  if (windows.length === 0) return { used, forgeUsed, byLane: zeroLanes() };
+  return { used, forgeUsed, byLane: rolloutTokensIn(windows) };
 }
 
 /**
@@ -292,12 +318,12 @@ function crossVendorUsage(subagentDir: string): CrossVendorUsage {
  * and the day dirs are local dates — iterate days by calendar date, not 24h
  * steps, so a DST boundary cannot skip a dir.
  */
-function rolloutTokensIn(windows: Array<[number, number]>): number {
+function rolloutTokensIn(windows: Array<[number, number]>): Record<OpenAILane, number> {
   const root = codexSessionsDir();
-  if (!existsSync(root)) return 0;
+  const byLane = zeroLanes();
+  if (!existsSync(root)) return byLane;
   const lo = Math.min(...windows.map(w => w[0]));
   const hi = Math.max(...windows.map(w => w[1]));
-  let sum = 0;
   const day = new Date(lo);
   day.setHours(0, 0, 0, 0);
   for (; day.getTime() <= hi; day.setDate(day.getDate() + 1)) {
@@ -312,10 +338,33 @@ function rolloutTokensIn(windows: Array<[number, number]>): number {
       let mtime: number;
       try { mtime = statSync(p).mtimeMs; } catch { continue; }
       if (!windows.some(([a, b]) => start <= b && mtime >= a)) continue;
-      sum += lastRolloutOutputTokens(p);
+      // Attribute the whole rollout to the model of its first turn. A rollout that switches models mid-session is
+      // attributed to its starting model; a rollout with no readable model falls into the SOL (forge) bucket as before.
+      byLane[laneForOpenAIModel(rolloutModel(p) ?? '') ?? 'forge'] += lastRolloutOutputTokens(p);
     }
   }
-  return sum;
+  return byLane;
+}
+
+/** The model named by the rollout's first `turn_context` event (verified against Codex CLI 0.160.0 logs, 2026-10-08). */
+function rolloutModel(path: string): string | null {
+  try {
+    const fd = openSync(path, 'r');
+    let text: string;
+    try {
+      const buf = Buffer.alloc(Math.min(statSync(path).size, 256 * 1024));
+      const read = readSync(fd, buf, 0, buf.length, 0);
+      text = buf.subarray(0, read).toString('utf-8');
+    } finally { closeSync(fd); }
+    for (const line of text.split('\n')) {
+      if (!line.includes('"turn_context"')) continue;
+      try {
+        const m = JSON.parse(line)?.payload?.model;
+        if (typeof m === 'string' && m) return m;
+      } catch { /* clipped line at the read boundary */ }
+    }
+  } catch { /* unreadable rollout: no model */ }
+  return null;
 }
 
 /**
@@ -364,7 +413,7 @@ function pruneState(dir: string): void {
 }
 
 export function computeMix(sessionId: string, transcriptOverride?: string): Mix {
-  const empty: Mix = { tokens: zero(), calls: zero(), pct: zero(), forgeTokens: 0, forgePct: 0, total: 0, crossVendor: false, unknownModels: [] };
+  const empty: Mix = { tokens: zero(), calls: zero(), pct: zero(), forgeTokens: 0, forgePct: 0, laneTokens: zeroLanes(), lanePct: zeroLanes(), total: 0, crossVendor: false, forgeUsed: false, unknownModels: [] };
   const main = transcriptOverride ?? findTranscript(sessionId);
   if (!main || !existsSync(main)) return empty;
 
@@ -393,18 +442,22 @@ export function computeMix(sessionId: string, transcriptOverride?: string): Mix 
   } catch { /* best-effort cache; correctness does not depend on the write */ }
 
   const cv = crossVendorUsage(subagentDir);
-  // ONE denominator across all five buckets (principal 2026-08-06): SOL's
-  // share and the Claude rungs' shares sum to 100 together.
-  const combined = toPct({ ...state.tokens, forge: cv.outputTokens });
-  const { forge: forgePct, ...rungPct } = combined;
+  // ONE denominator across every bucket (principal 2026-08-06): the OpenAI lanes' shares and the Claude rungs' shares
+  // sum to 100 together.
+  const combined = toPct({ ...state.tokens, ...cv.byLane });
+  const rungPct = Object.fromEntries(RUNGS.map(r => [r, combined[r]])) as Record<EffortLevel, number>;
+  const lanePct = Object.fromEntries(OPENAI_LANES.map(l => [l, combined[l]])) as Record<OpenAILane, number>;
   return {
     tokens: state.tokens,
     calls: state.calls,
-    pct: rungPct as Record<EffortLevel, number>,
-    forgeTokens: cv.outputTokens,
-    forgePct,
-    total: RUNGS.reduce((s, r) => s + state.tokens[r], 0) + cv.outputTokens,
+    pct: rungPct,
+    forgeTokens: cv.byLane.forge,
+    forgePct: lanePct.forge,
+    laneTokens: cv.byLane,
+    lanePct,
+    total: RUNGS.reduce((s, r) => s + state.tokens[r], 0) + OPENAI_LANES.reduce((s, l) => s + cv.byLane[l], 0),
     crossVendor: cv.used,
+    forgeUsed: cv.forgeUsed,
     unknownModels: state.unknownModels,
   };
 }
@@ -426,10 +479,11 @@ if (import.meta.main) {
   if (argv.includes('--json')) {
     console.log(JSON.stringify(mix, null, 2));
   } else {
-    // Shell-eval contract consumed by LIFEOS_StatusLine.sh. mix_forge is a
-    // PERCENTAGE (same denominator as the rungs); mix_forge_used keeps the
-    // used-flag so an attributed-but-unmeasured dispatch still lights the rung.
+    // Shell-eval contract consumed by LIFEOS_StatusLine.sh. mix_forge (SOL) and mix_luna/terra/astra/cyber are
+    // PERCENTAGES (same denominator as the rungs); mix_forge_used keeps the used-flag so an attributed-but-unmeasured
+    // dispatch still lights the rung.
     const out = RUNGS.map(r => `mix_${r}=${mix.pct[r]}`).join('\n');
-    console.log(`${out}\nmix_total=${mix.total}\nmix_forge=${mix.forgePct}\nmix_forge_used=${mix.crossVendor ? 1 : 0}`);
+    const lanes = OPENAI_LANES.filter(l => l !== 'forge').map(l => `mix_${l}=${mix.lanePct[l]}`).join('\n');
+    console.log(`${out}\n${lanes}\nmix_total=${mix.total}\nmix_forge=${mix.forgePct}\nmix_forge_used=${mix.forgeUsed ? 1 : 0}`);
   }
 }

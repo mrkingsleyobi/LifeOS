@@ -1,0 +1,47 @@
+{
+  "_generated": "bun omniroute/Generate.ts — do not hand-edit",
+  "combos": [
+    {
+      "name": "lifeos-luna",
+      "targets": [
+        {
+          "provider": "openai",
+          "model": "gpt-6-luna"
+        }
+      ]
+    },
+    {
+      "name": "lifeos-terra",
+      "targets": [
+        {
+          "provider": "openai",
+          "model": "gpt-5.6-terra"
+        }
+      ],
+      "fallbackTier": "lifeos-luna",
+      "fallbackDelayMs": 200
+    },
+    {
+      "name": "lifeos-sol",
+      "targets": [
+        {
+          "provider": "openai",
+          "model": "gpt-6.1-sol"
+        }
+      ],
+      "fallbackTier": "lifeos-terra",
+      "fallbackDelayMs": 200
+    },
+    {
+      "name": "lifeos-astra",
+      "targets": [
+        {
+          "provider": "openai",
+          "model": "gpt-6-astra"
+        }
+      ],
+      "fallbackTier": "lifeos-sol",
+      "fallbackDelayMs": 200
+    }
+  ]
+}

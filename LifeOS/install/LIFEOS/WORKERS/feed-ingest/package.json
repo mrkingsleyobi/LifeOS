@@ -1,0 +1,6 @@
+{
+  "name": "arbol-a-feed-ingest",
+  "private": true,
+  "type": "module",
+  "dependencies": { "fast-xml-parser": "5.11.1" }
+}

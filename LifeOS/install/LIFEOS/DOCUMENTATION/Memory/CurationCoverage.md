@@ -102,9 +102,12 @@ Different content types update at fundamentally different rates. The cadence per
 ## Roadmap
 
 - **P1 (this build, 2026-05-25)** — extend reviewer prompt with 7 new proposal subtypes (`style`, `definition`, `canonical-content`, `resume`, `operational-rule`, `projects`, `contacts`); persist `target_kind` on queue rows; render `[kind]` badge in Telegram; group pending by subtype in the memory-status CLI. (Telegram integration since removed 2026-07-15.)
-- **P2 (named follow-up ISA)** — TELOS autonomic loop. Weekly `TelosReviewer.ts` cron that reads recent ISAs + LEARNING + WISDOM + recent PRINCIPAL_MEMORY snapshots, emits TELOS-change proposals (goal-deferral, new-strategy, mission-drift) routed via the `Telos` skill Update workflow.
-- **P3 (named follow-up ISA)** — WISDOM autonomic loop. Monthly synthesis pass extracts new WISDOM frames from accumulated LEARNING signals; surfaces principle candidates via the Pulse dashboard for principal review-and-graduate.
-- **P4 (named follow-up ISA)** — On-demand LLM-agent retrieval tier (`recall "<question>"` CLI command) for deep questions that need tool-using LLM loops over KNOWLEDGE. Different latency budget, different use case from per-turn BM25.
+- **P2 (built 2026-10-08, `LIFEOS/TOOLS/TelosReviewer.ts`; mock-tested, not yet run against live inference)** — TELOS autonomic loop. Propose-only: writes `MEMORY/TELOS_REVIEWS/<ISO week>.md`, never edits TELOS. Schedule weekly yourself (launchd/cron); no scheduler is installed.
+  Original design: Weekly `TelosReviewer.ts` cron that reads recent ISAs + LEARNING + WISDOM + recent PRINCIPAL_MEMORY snapshots, emits TELOS-change proposals (goal-deferral, new-strategy, mission-drift) routed via the `Telos` skill Update workflow.
+- **P3 (built 2026-10-08, `LIFEOS/TOOLS/WisdomMonthly.ts`; mock-tested, not yet run against live inference)** — candidates-only: writes `MEMORY/WISDOM/CANDIDATES/<YYYY-MM>.md`, never FRAMES/PRINCIPLES; each candidate must cite 2+ real LEARNING files. Schedule monthly yourself; no scheduler is installed; no Pulse dashboard surface was built.
+  Original design: WISDOM autonomic loop. Monthly synthesis pass extracts new WISDOM frames from accumulated LEARNING signals; surfaces principle candidates via the Pulse dashboard for principal review-and-graduate.
+- **P4 (built 2026-10-08, `LIFEOS/TOOLS/Recall.ts`; mock-tested, not yet run against live inference)** — read-only bounded loop (search → read → cited answer, max 6 steps) over `MEMORY/KNOWLEDGE`; uses its own keyword scorer, not MemoryRetriever's BM25; `read` only accepts paths a search surfaced; uncited answers are replaced by "No supported answer".
+  Original design: On-demand LLM-agent retrieval tier (`recall "<question>"` CLI command) for deep questions that need tool-using LLM loops over KNOWLEDGE. Different latency budget, different use case from per-turn BM25.
 
 ## Adding a new file to the curation system
 

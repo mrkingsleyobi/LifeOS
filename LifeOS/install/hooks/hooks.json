@@ -380,6 +380,16 @@
           }
         ]
       }
+      ,{
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/RouterShadow.hook.ts",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
     ],
     "PostToolUseFailure": [
       {
