@@ -1,0 +1,39 @@
+{
+  "_doc": "Router policy data. Edit here, never in code. Model IDs are NOT here — lanes resolve through TOOLS/models.ts (LANES/CROSS_VENDOR).",
+  "mode": "shadow",
+  "bands": [
+    { "max": 0.25, "lane": "luna" },
+    { "max": 0.45, "lane": "terra" },
+    { "max": 0.65, "lane": "sol" },
+    { "max": 0.82, "lane": "fable" },
+    { "max": 1.01, "lane": "astra" }
+  ],
+  "codeChangeOverride": { "fromLane": "sol", "toLane": "opus" },
+  "weights": {
+    "needsDeepReasoning": 0.35,
+    "coreSystemOrArchitecture": 0.25,
+    "needsJudgmentUnderAmbiguity": 0.15,
+    "multiStepPlanning": 0.10,
+    "highStakesOrIrreversible": 0.10,
+    "creativeOrStrategic": 0.05,
+    "bulkRepetitiveTemplated": -0.35,
+    "formatBoundFromGivenContent": -0.20,
+    "simpleLookupOrChat": -0.15
+  },
+  "effort": { "lowBelow": 0.25, "mediumBelow": 0.5, "highBelow": 0.8 },
+  "fallbackChains": {
+    "astra": ["sol", "fable"],
+    "fable": ["opus", "sol"],
+    "opus": ["sol", "sonnet"],
+    "sol": ["terra", "opus"],
+    "terra": ["luna", "sonnet"],
+    "luna": ["haiku"]
+  },
+  "fusion": { "enabled": false, "lanes": ["astra", "fable"], "whenScoreAtLeast": 0.9, "note": "second opinion for audits only; off until shadow data justifies it" },
+  "privateLane": {
+    "allowedVendors": ["anthropic"],
+    "chain": ["fable", "opus", "sonnet"],
+    "note": "Never routed through OmniRoute or sent to Jev. Triggered by the deterministic gate in Policy.ts."
+  },
+  "jev": { "timeoutMs": 1500, "sensitiveThreshold": 0.5 }
+}

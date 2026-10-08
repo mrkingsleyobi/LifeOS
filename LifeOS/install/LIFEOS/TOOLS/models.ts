@@ -131,6 +131,7 @@ export function laneModel(lane: string): string {
   const l = LANES[lane.toLowerCase()];
   // Non-ladder agents (helios, gemini, grok, forge…) resolve straight from their CROSS_VENDOR pin.
   if (!l && CROSS_VENDOR[lane]) return CROSS_VENDOR[lane];
+  if (!l && lane in CURRENT) return lane; // bare Claude tier alias (sonnet/haiku) — fallback-chain targets
   if (!l) throw new Error(`unknown lane '${lane}' — one of ${Object.keys(LANES).join(", ")}, or a CROSS_VENDOR key`);
   return l.vendor === "anthropic" ? l.ref : CROSS_VENDOR[l.ref];
 }
