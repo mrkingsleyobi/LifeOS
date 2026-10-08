@@ -102,7 +102,8 @@
     "cyber": {
       "question": "isSecurityWork",
       "threshold": 0.6,
-      "note": "Helios refuses work without authorization context (pentest scope, CTF, defensive use); the router only routes. Never reached when the privacy gate or Jev's sensitivity flag fires."
+      "note": "DISABLED: gpt-5.6-cyber returned 404 model_not_found on the owner's OpenAI account (2026-10-08) and is in no public model list. It is an OpenAI Trusted Access model. Set enabled to true once a model call to it succeeds (or change its pin in TOOLS/models.ts CROSS_VENDOR.helios). Helios refuses work without authorization context.",
+      "enabled": false
     }
   },
   "_mode_note": "shadow = log only. advise = log AND inject one line of advice into the session (the session then decides whether to dispatch the lane agent). A hook cannot change the main-loop model, so there is no stronger mode."

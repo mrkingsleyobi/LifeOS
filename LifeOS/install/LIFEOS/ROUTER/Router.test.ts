@@ -91,16 +91,23 @@ describe("Jev wire flavors", () => {
 
 describe("security specialty lane (cyber / Helios)", () => {
   const facts = { chars: 200, depthWords: false };
+  const shipped = cfg;                       // as shipped: cyber DISABLED (the model 404s on the owner's account)
+  const cfg2 = { ...cfg, specialtyLanes: { cyber: { ...cfg.specialtyLanes!.cyber, enabled: true } } }; // flipped on
+  test("as shipped, security work is NOT routed to a model that does not exist: it routes by intelligence", () => {
+    expect(shipped.specialtyLanes!.cyber.enabled).toBe(false);
+    const d = decide({ isSecurityWork: 0.95, needsDeepReasoning: 0.9, coreSystemOrArchitecture: 0.9 }, facts, "jev", shipped);
+    expect(d.lane).not.toBe("cyber");
+  });
   test("a security task routes to cyber when Jev is confident", () => {
-    const d = decide({ isSecurityWork: 0.9, needsDeepReasoning: 0.5 }, facts, "jev", cfg);
+    const d = decide({ isSecurityWork: 0.9, needsDeepReasoning: 0.5 }, facts, "jev", cfg2);
     expect(d).toMatchObject({ lane: "cyber", private: false, fallback: ["sol", "fable"] });
     expect(laneModel(d.lane)).toBe("gpt-5.6-cyber");
   });
   test("below the threshold it routes by intelligence as usual", () => {
-    expect(decide({ isSecurityWork: 0.4, bulkRepetitiveTemplated: 0.9 }, facts, "jev", cfg).lane).toBe("luna");
+    expect(decide({ isSecurityWork: 0.4, bulkRepetitiveTemplated: 0.9 }, facts, "jev", cfg2).lane).toBe("luna");
   });
   test("sensitivity beats the specialty lane: security work on secrets stays on Anthropic", () => {
-    const d = decide({ isSecurityWork: 0.95, containsSensitiveOrPrivateData: 0.9 }, facts, "jev", cfg);
+    const d = decide({ isSecurityWork: 0.95, containsSensitiveOrPrivateData: 0.9 }, facts, "jev", cfg2);
     expect(d.private).toBe(true);
     expect(["fable", "opus", "sonnet"]).toContain(d.lane);
   });
@@ -108,7 +115,8 @@ describe("security specialty lane (cyber / Helios)", () => {
     expect(privacyGate("pentest report: api_key=abcd1234efgh5678 was found in the repo")).not.toBeNull();
   });
   test("the heuristic recognizes security keywords", () => {
-    expect(run("Analyze this CVE-2026-1234 exploit for the CTF").lane).toBe("cyber");
+    const f = { chars: 50, depthWords: false };
+    expect(decide(heuristicProbs("Analyze this CVE-2026-1234 exploit for the CTF", f), f, "heuristic", cfg2).lane).toBe("cyber");
   });
 });
 

@@ -42,17 +42,6 @@
       ],
       "fallbackTier": "lifeos-sol",
       "fallbackDelayMs": 200
-    },
-    {
-      "name": "lifeos-cyber",
-      "targets": [
-        {
-          "provider": "openai",
-          "model": "gpt-5.6-cyber"
-        }
-      ],
-      "fallbackTier": "lifeos-sol",
-      "fallbackDelayMs": 200
     }
   ]
 }

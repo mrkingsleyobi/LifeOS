@@ -10,7 +10,7 @@ export interface LanesConfig {
   weights: Record<string, number>;
   effort: { lowBelow: number; mediumBelow: number; highBelow: number };
   fallbackChains: Record<string, string[]>;
-  specialtyLanes?: Record<string, { question: string; threshold: number }>;
+  specialtyLanes?: Record<string, { question: string; threshold: number; enabled?: boolean }>;
   fusion: { enabled: boolean; lanes: string[]; whenScoreAtLeast: number };
   privateLane: { allowedVendors: string[]; chain: string[] };
   jev: { timeoutMs: number; sensitiveThreshold: number; egress?: "on" | "off" };
@@ -105,7 +105,7 @@ export function decide(p: Probs, f: Facts, source: "jev" | "heuristic", cfg: Lan
   if (sensitive) return privateDecision("Jev flagged sensitive content", cfg, "jev");
   const score = scoreOf(p, cfg);
   // Specialty lanes win on task type (e.g. security work → cyber), after the sensitivity check above.
-  const specialty = Object.entries(cfg.specialtyLanes ?? {}).find(([, r]) => (p[r.question] ?? 0) >= r.threshold)?.[0];
+  const specialty = Object.entries(cfg.specialtyLanes ?? {}).find(([, r]) => r.enabled !== false && (p[r.question] ?? 0) >= r.threshold)?.[0];
   const lane = specialty ?? laneFor(score, p, cfg);
   return {
     lane, score, source,

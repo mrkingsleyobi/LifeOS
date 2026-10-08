@@ -17,7 +17,9 @@ import { LANES, laneModel } from "../../TOOLS/models";
 import { loadConfig } from "../Config";
 
 const cfg = loadConfig();
-const isOpenAI = (lane: string) => LANES[lane]?.vendor === "openai";
+// Lanes disabled in lanes.json (e.g. cyber, whose model 404s on the owner account) get no combo.
+const enabled = (lane: string) => cfg.specialtyLanes?.[lane]?.enabled !== false;
+const isOpenAI = (lane: string) => LANES[lane]?.vendor === "openai" && enabled(lane);
 const combos = Object.keys(LANES).filter(isOpenAI).map((lane) => {
   const next = (cfg.fallbackChains[lane] ?? []).find(isOpenAI);
   return {

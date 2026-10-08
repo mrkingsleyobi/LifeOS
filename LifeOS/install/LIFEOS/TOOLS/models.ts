@@ -88,10 +88,9 @@ export function currentModel(tier: ClaudeTier): string {
 export const CROSS_VENDOR: Record<string, string> = {
   forge: "gpt-5.6-sol",                // OpenAI (Tier-2 egress); build + audit modes
   helios: "gpt-5.6-cyber",             // OpenAI Trusted Access Program (blue+red cyber model; Tier-2 egress) — the offensive-security agent's finder; access tested + principal-approved. Lights the statusline CYBER lane (*cyber* match)
-  // ROUTER LANES (agents named for their model). IDs follow the Model Tier List display names
-  // (GPT-6 Astra / GPT-6.1 Sol / GPT-5.6 Terra / GPT-6 Luna) and were confirmed present in the
-  // account's OpenAI model list (GET /v1/models) on 2026-10-08. Presence in that list is not proof
-  // that `codex exec` accepts them; fix the string here (one edit point) if a dispatch is refused.
+  // ROUTER LANES (agents named for their model). IDs follow the Model Tier List display names and were verified by a
+  // real Chat Completions call on the owner's account on 2026-10-08 (astra, sol, terra, luna all answered under their own
+  // IDs). That proves the API accepts them, not that `codex exec` does; fix the string here (one edit point) if a dispatch is refused.
   astra: "gpt-6-astra",                // OpenAI (Tier-2 egress); MAX lane — hardest reasoning
   sol: "gpt-6.1-sol",                  // OpenAI (Tier-2 egress); HIGH lane
   terra: "gpt-5.6-terra",              // OpenAI (Tier-2 egress); MID workhorse lane
@@ -126,7 +125,7 @@ export const LANES: Record<string, Lane> = {
   fable: { agent: "Fable", vendor: "anthropic", rank: 5, ref: "fable" },
   astra: { agent: "Astra", vendor: "openai",    rank: 6, ref: "astra" },
   // Security specialty (Helios, OpenAI Trusted Access cyber model). Routed by task type; unverified in any public catalog.
-  cyber: { agent: "Helios", vendor: "openai",   rank: 3, ref: "helios", specialty: true },
+  cyber: { agent: "Helios", vendor: "openai",   rank: 3, ref: "helios", specialty: true }, // DISABLED in lanes.json: the model 404s on the owner account
 };
 
 /** Concrete model for a lane: Anthropic → tier alias, OpenAI → CROSS_VENDOR pin. */
