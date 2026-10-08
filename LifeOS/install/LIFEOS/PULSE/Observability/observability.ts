@@ -34,6 +34,7 @@ import { spawnSync } from "child_process"
 import { homedir } from "os"
 import YAML from "yaml"
 import { PULSE_BASE } from "../endpoint"
+import { sanitizeMeta } from "./src/lib/isa-meta"
 import { RUN_ACTIVITY } from "../../TOOLS/ascent"
 import { loadLifeosConfig } from "../../TOOLS/LifeosConfig"
 
@@ -680,6 +681,7 @@ function buildAlgorithmStatePayload(): { algorithms: any[]; active: boolean; pul
         iteration: s.iteration || 1,
         reworkCount: s.iteration ? s.iteration - 1 : 0,
         tracked,
+        meta: sanitizeMeta(s.meta),
         climb: climbMap.get(slug) ?? [],
         activity: s.sessionUUID ? buildActivitySummary(activityMap.get(s.sessionUUID), nowMs) : undefined,
         iscDeltas: buildIscDeltas(climbMap.get(slug), nowMs),

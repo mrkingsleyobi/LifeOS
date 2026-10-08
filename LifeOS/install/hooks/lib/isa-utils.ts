@@ -21,6 +21,7 @@ import { writeFileSync, readdirSync, statSync, existsSync, mkdirSync, appendFile
 import { join, basename } from 'path';
 import { createHash } from 'crypto';
 import { paiPath } from './paths';
+import { extractIsaMeta, hasMeta, type IsaMeta } from './isa-meta';
 import { appendWorkEvents, diffRegistry, foldToSnapshot, readLiveRegistry, workEventsPath } from './work-events';
 import { PHASE_TO_ASCENT, ascentTag, deriveAscent, isRunActive } from '../../LIFEOS/TOOLS/ascent';
 
@@ -239,6 +240,8 @@ export interface SessionEntry {
   updatedAt: string;
   criteria?: CriterionEntry[];
   iteration?: number;
+  /** Badge/strip/panel data parsed from the ISA (see isa-meta.ts). Absent for ISAs that carry none of the fields. */
+  meta?: IsaMeta;
   ratings?: RatingPulse[];
   // Enriched pipeline data
   capabilities?: string[];      // Skills/capabilities selected for this session
@@ -912,6 +915,9 @@ export function syncToWorkJson(fm: Record<string, string>, isaPath: string, cont
     ? parseCapabilities(content)
     : (existing.capabilities || []);
 
+  // Pulse badge/strip/panel metadata (goal, density, journey, capabilities, decisions, verification).
+  const isaMeta: IsaMeta = content ? extractIsaMeta(content) : (existing.meta || {});
+
   // Get agents from subagent-events.jsonl for this session
   const resolvedSessionId = sessionId || existing.sessionUUID;
   const agents: AgentEntry[] = resolvedSessionId
@@ -954,6 +960,7 @@ export function syncToWorkJson(fm: Record<string, string>, isaPath: string, cont
     intent: intent || undefined,
     criteriaParseWarning: criteriaParseWarning || undefined,
     ...(fm.iteration ? { iteration: parseInt(fm.iteration) || 1 } : {}),
+    ...(hasMeta(isaMeta) ? { meta: isaMeta } : {}),
     // v6.9.0: body diff gate for Resume After Complete (B2).
     ...(incomingBodyHash ? { bodyHash: incomingBodyHash, lastBodySize: persistedBodyLength } : {}),
     ...(fm.resumed_at ? { resumedAt: fm.resumed_at } : {}),

@@ -6,6 +6,7 @@ import { useAlgorithmState } from "@/hooks/useAlgorithmState";
 import type { AlgorithmState, AlgorithmCriterion, ActivityClass } from "@/types/algorithm";
 import { deriveLifecycle, LIFECYCLE_META, LIFECYCLE_ORDER, formatElapsed, formatAgo, type Lifecycle } from "@/lib/lifecycle";
 import ClimbChart from "./ClimbChart";
+import { IsaMetaBadges, IsaMetaDetail } from "./IsaMeta";
 import QuickPulseStrip from "./QuickPulseStrip";
 import EmptyStateGuide from "@/components/EmptyStateGuide";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -335,6 +336,8 @@ function ClimbExpanded({ s, bare = false }: { s: AlgorithmState; bare?: boolean 
           </div>
         )}
 
+        <IsaMetaDetail meta={s.meta} done={claimCounts(s).done} total={claimCounts(s).total} />
+
         {s.intent && !s.criteria.length && (
           <p className="text-sm text-ink-2 leading-relaxed" data-sensitive>{s.intent}</p>
         )}
@@ -457,6 +460,7 @@ function BoardRow({
 
         {/* ISA badge — tracked rows announce themselves */}
         <ISABadge s={s} />
+        <IsaMetaBadges meta={s.meta} />
 
         {/* rework badge */}
         {rework && (
@@ -560,6 +564,7 @@ function SessionCard2({
           style={{ backgroundColor: meta.color }}
         />
         <ISABadge s={s} size="xs" />
+        <IsaMetaBadges meta={s.meta} size="xs" />
         <ActivityChip s={s} size="xs" />
         {rework && (
           <span className="text-[10px] font-mono text-amber-400/80 shrink-0">×{s.iteration}</span>

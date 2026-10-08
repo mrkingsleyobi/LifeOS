@@ -38,9 +38,9 @@ Compact pills/chips that fit in session rows and headers. One badge = one piece 
 | **ResponseModeBadge** / **AlgorithmModeBadge** | `response_mode:` / `algorithm_mode:` | — | CANCELLED (mode system retired 2026-07-11, before build) |
 | **Lifecycle pill** | derived (`src/lib/lifecycle.ts`: scoping/climbing/learning/done/session/idle) | `WorkBoard.tsx` | shipped 2026-07-14 |
 | **Rework badge (×N)** | `iteration:` | `WorkBoard.tsx` | shipped 2026-07-14 |
-| **GoalBadge** | presence of `principal_stated_goal:` (v6.4.0) | NOT YET BUILT | backlog |
-| **DensityBadge** | `density_score:` + `divergence_risk:` (v6.5.0) | NOT YET BUILT | backlog |
-| **ForgeAuditBadge** | Forge audit verdict (pass/concerns/fail) recorded in `## Verification` | NOT YET BUILT | planned next-ISA |
+| **GoalBadge** | presence of `principal_stated_goal:` (v6.4.0) | `IsaMeta.tsx` | built 2026-10-08 (unverified in a live Pulse; see below) |
+| **DensityBadge** | `density_score:` + `divergence_risk:` (v6.5.0) | `IsaMeta.tsx` | built 2026-10-08 (unverified in a live Pulse; see below) |
+| **ForgeAuditBadge** | Forge audit verdict (pass/concerns/fail) recorded in `## Verification` | `IsaMeta.tsx` | built 2026-10-08 (unverified in a live Pulse; see below) |
 
 ### Badge color conventions
 
@@ -57,8 +57,8 @@ Horizontal full-width visualizations that span the session card or dashboard row
 | **QuickPulseStrip** | live ratings (24h window; mood verdict muted below 3 ratings) | `QuickPulseStrip.tsx` | shipped |
 | **ClimbChart** | `work-events.jsonl` progress/criteria transitions per slug (mini sparkline + full ascent) | `ClimbChart.tsx` | shipped 2026-07-14 |
 | **PhaseProgressStrip** | `phase:` stations | — | CANCELLED (declared phases retired; the Climb replaces it) |
-| **JourneyStrip** | `current_state:` → ISC progress → `ideal_state:` | NOT YET BUILT | backlog |
-| **CapabilitiesStrip** | `capabilities_invoked:` array | NOT YET BUILT | backlog |
+| **JourneyStrip** | `current_state:` → ISC progress → `ideal_state:` | `IsaMeta.tsx` | built 2026-10-08 (unverified in a live Pulse; see below) |
+| **CapabilitiesStrip** | `capabilities_invoked:` array | `IsaMeta.tsx` | built 2026-10-08 (unverified in a live Pulse; see below) |
 | **IterationHistoryStrip** | `## Iteration History` section | NOT YET BUILT | backlog |
 | **IntensityBar** | tool-call rate over time | `IntensityBar.tsx` | shipped (Activity tab) |
 | **FocusIndicator** | phase + ISA presence | — | REMOVED 2026-07-14 (dead code, zero importers) |
@@ -96,12 +96,16 @@ Multi-line expandable detail views shown on session click.
 | Panel | Data source | Component | Status |
 |-------|-------------|-----------|--------|
 | **PhaseDetailPanel** | full phase history with timing | — | REMOVED 2026-07-14 (phase ceremony retired; expanded WorkBoard rows show claims + evidence + Climb instead) |
-| **GoalPanel** | `principal_stated_goal:` + signal type + locked timestamp | NOT YET BUILT | planned next-ISA |
-| **DecisionsPanel** | `## Decisions` section | NOT YET BUILT | planned next-ISA |
+| **GoalPanel** | `principal_stated_goal:` + signal type + locked timestamp | `IsaMeta.tsx` | built 2026-10-08 (unverified in a live Pulse; see below) |
+| **DecisionsPanel** | `## Decisions` section | `IsaMeta.tsx` | built 2026-10-08 (unverified in a live Pulse; see below) |
 | **ChangelogPanel** | `## Changelog` section (Deutsch format entries) | NOT YET BUILT | planned next-ISA |
-| **VerificationPanel** | `## Verification` section + Forge audit results | NOT YET BUILT | planned next-ISA |
+| **VerificationPanel** | `## Verification` section + Forge audit results | `IsaMeta.tsx` | built 2026-10-08 (unverified in a live Pulse; see below) |
 
 ---
+
+### Built 2026-10-08 (not yet seen in a live Pulse)
+
+`hooks/lib/isa-meta.ts` parses the fields and sections above out of an ISA; `ISASync` (`isa-utils.ts`) puts the result on the `work.json` row as `meta`; `observability.ts` re-validates it (`src/lib/isa-meta.ts`) and passes it through `AlgorithmState.meta`; `src/components/activity/IsaMeta.tsx` renders it, wired into `WorkBoard` (badges on every row, strip and panels in a tracked run's expanded view). Every piece renders nothing when its field is absent. Caveats: the **Forge audit verdict is inferred** (the spec only says it is "recorded in `## Verification`"): a line containing "audit" and pass/concerns/fail, latest wins. **IterationHistoryStrip and ChangelogPanel are not built.** Tests: `hooks/lib/isa-meta*.test.ts`, `src/lib/isa-meta.test.ts`, `src/components/activity/IsaMeta.test.tsx`; the compiled `out/` bundle was not rebuilt.
 
 ## Tab-Level Surfaces (agents page — 2026-07-14 redesign)
 
