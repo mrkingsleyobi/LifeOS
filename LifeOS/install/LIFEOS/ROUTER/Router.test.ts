@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { decide, effortOf, heuristicProbs, loadConfig, privacyGate, redact, scoreOf } from "./Policy";
+import { loadConfig } from "./Config";
+import { decide, effortOf, heuristicProbs, privacyGate, redact, scoreOf } from "./Policy";
 import { laneModel } from "../TOOLS/models";
 
 const cfg = loadConfig();

@@ -1,0 +1,10 @@
+{
+  // Arbol-style Action Worker (naming: arbol-a-{kebab-name}). Router edge: Jev + Policy, no state.
+  "name": "arbol-a-router-decide",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true }
+  // Secrets (never in this file):  wrangler secret put ROUTER_TOKEN   |   wrangler secret put AI_GATEWAY_API_KEY
+  // Optional var: JEV_BASE_URL (default https://ai-gateway.vercel.sh)
+}

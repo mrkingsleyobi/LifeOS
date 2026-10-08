@@ -16,12 +16,27 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { LANES, laneModel } from "../TOOLS/models";
 import { askJev, jevConfigured } from "./Jev";
-import { decide, hashPrompt, heuristicProbs, loadConfig, privacyGate, privateDecision, redact, type Decision } from "./Policy";
+import { loadConfig, hashPrompt } from "./Config";
+import { decide, heuristicProbs, privacyGate, privateDecision, redact, type Decision } from "./Policy";
 
 const HOME = process.env.HOME ?? homedir();
 const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
 export const SHADOW_LOG = join(LIFEOS_DIR, "MEMORY", "OBSERVABILITY", "router-shadow.jsonl");
 const DEPTH = /\b(think (deeply|hard)|ultrathink|deep(ly)? analy[sz]e)\b/i;
+
+async function viaWorker(prompt: string, timeoutMs: number): Promise<Decision | null> {
+  const url = process.env.ROUTER_WORKER_URL, token = process.env.ROUTER_WORKER_TOKEN;
+  if (!url || !token) return null;
+  try {
+    const res = await fetch(`${url.replace(/\/$/, "")}/route`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.ok ? ((await res.json()) as Decision) : null;
+  } catch { return null; }
+}
 
 export async function resolve(prompt: string): Promise<Decision & { latencyMs: number }> {
   const t0 = Date.now();
@@ -31,6 +46,10 @@ export async function resolve(prompt: string): Promise<Decision & { latencyMs: n
   const d: Decision = gate
     ? privateDecision(gate, cfg)
     : await (async () => {
+        // Optional cloud edge (worker/): keeps the Jev key off this machine. Reached ONLY after the
+        // local privacy gate above passed. Any failure falls through to direct Jev, then heuristic.
+        const edge = await viaWorker(prompt, cfg.jev.timeoutMs + 500);
+        if (edge) return edge;
         const jev = await askJev(redact(prompt), cfg.jev.timeoutMs);
         return decide(jev ?? heuristicProbs(prompt, facts), facts, jev ? "jev" : "heuristic", cfg);
       })();

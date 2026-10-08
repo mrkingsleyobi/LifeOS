@@ -1,11 +1,8 @@
 /**
- * Policy — pure routing decision. No I/O, no model call: probabilities in, lane out.
+ * Policy — pure routing decision. No I/O, no model call, no node imports (it also runs inside the
+ * Cloudflare Worker): probabilities in, lane out. File access lives in Config.ts.
  * Data (bands, weights, chains) lives in lanes.json; this file only applies it.
  */
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 export interface LanesConfig {
   mode: "shadow" | "enforce";
   bands: { max: number; lane: string }[];
@@ -17,9 +14,6 @@ export interface LanesConfig {
   privateLane: { allowedVendors: string[]; chain: string[] };
   jev: { timeoutMs: number; sensitiveThreshold: number };
 }
-
-export const loadConfig = (): LanesConfig =>
-  JSON.parse(readFileSync(join(import.meta.dir, "lanes.json"), "utf-8"));
 
 export type Probs = Record<string, number>;
 export interface Facts { chars: number; depthWords: boolean }
@@ -60,8 +54,6 @@ export function redact(prompt: string): string {
     .replace(/\+?\d[\d\s().-]{8,}\d/g, "[number]")
     .replace(/https?:\/\/\S+/g, "[url]");
 }
-
-export const hashPrompt = (p: string) => createHash("sha256").update(p).digest("hex").slice(0, 12);
 
 export function scoreOf(p: Probs, cfg: LanesConfig): number {
   let s = 0;

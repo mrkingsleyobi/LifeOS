@@ -14,7 +14,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { LANES, laneModel } from "../../TOOLS/models";
-import { loadConfig } from "../Policy";
+import { loadConfig } from "../Config";
 
 const cfg = loadConfig();
 const isOpenAI = (lane: string) => LANES[lane]?.vendor === "openai";
