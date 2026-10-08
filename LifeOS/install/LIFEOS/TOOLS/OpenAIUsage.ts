@@ -13,6 +13,10 @@
  *   oai_5h_pct=<int>         oai_5h_reset=<epoch s>
  * `--json` prints the same fields as JSON.
  *
+ * NOTE (verified 2026-10-08): only ChatGPT-login Codex sessions carry plan rate limits. Sessions authenticated with an API key
+ * log `rate_limits: null`, so this tool reports `oai_present=false` for them and the OAI WK bar stays hidden; it appears
+ * under a ChatGPT (e.g. Max) login. The primary/secondary shape below follows the format and has not been seen live with real limits.
+ *
  * A window whose reset time has already passed reads 0% — the logged number is
  * pre-reset data (same clamp the Anthropic scoped bar applies).
  */
