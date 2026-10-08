@@ -88,3 +88,49 @@ describe("Jev wire flavors", () => {
     expect(await evaluate("k", "https://api.typesafe.ai", "x", 1000, "native")).toBeNull();
   });
 });
+
+describe("security specialty lane (cyber / Helios)", () => {
+  const facts = { chars: 200, depthWords: false };
+  test("a security task routes to cyber when Jev is confident", () => {
+    const d = decide({ isSecurityWork: 0.9, needsDeepReasoning: 0.5 }, facts, "jev", cfg);
+    expect(d).toMatchObject({ lane: "cyber", private: false, fallback: ["sol", "fable"] });
+    expect(laneModel(d.lane)).toBe("gpt-5.6-cyber");
+  });
+  test("below the threshold it routes by intelligence as usual", () => {
+    expect(decide({ isSecurityWork: 0.4, bulkRepetitiveTemplated: 0.9 }, facts, "jev", cfg).lane).toBe("luna");
+  });
+  test("sensitivity beats the specialty lane: security work on secrets stays on Anthropic", () => {
+    const d = decide({ isSecurityWork: 0.95, containsSensitiveOrPrivateData: 0.9 }, facts, "jev", cfg);
+    expect(d.private).toBe(true);
+    expect(["fable", "opus", "sonnet"]).toContain(d.lane);
+  });
+  test("the privacy gate still wins over everything for credential-bearing security prompts", () => {
+    expect(privacyGate("pentest report: api_key=abcd1234efgh5678 was found in the repo")).not.toBeNull();
+  });
+  test("the heuristic recognizes security keywords", () => {
+    expect(run("Analyze this CVE-2026-1234 exploit for the CTF").lane).toBe("cyber");
+  });
+});
+
+import { pickJev } from "./JevCore";
+describe("Jev credential picker + openrouter flavor", () => {
+  test("order: openrouter, native, gateway; JEV_PROVIDER forces one; none → undefined", () => {
+    expect(pickJev({ OPENROUTER_API_KEY: "o", TYPESAFE_API_KEY: "t", AI_GATEWAY_API_KEY: "g" })?.flavor).toBe("openrouter");
+    expect(pickJev({ TYPESAFE_API_KEY: "t", AI_GATEWAY_API_KEY: "g" })?.flavor).toBe("native");
+    expect(pickJev({ AI_GATEWAY_API_KEY: "g" })?.flavor).toBe("gateway");
+    expect(pickJev({ OPENROUTER_API_KEY: "o", AI_GATEWAY_API_KEY: "g", JEV_PROVIDER: "gateway" })?.flavor).toBe("gateway");
+    expect(pickJev({ JEV_PROVIDER: "native", OPENROUTER_API_KEY: "o" })).toBeUndefined();
+    expect(pickJev({})).toBeUndefined();
+  });
+  test("openrouter: decisions endpoint, jev-1.13, noul questions WITH required criteria, reads .noul", async () => {
+    const real = globalThis.fetch; const c: { url?: string; body?: any } = {};
+    globalThis.fetch = (async (u: string, init: any) => { c.url = u; c.body = JSON.parse(init.body); return new Response(JSON.stringify({ answers: Object.fromEntries(Object.keys(QUESTIONS).map((k) => [k, { type: "noul", noul: 0.7 }])), usage: { input_tokens: 5, output_tokens: 0 } })); }) as any;
+    try {
+      const p = await evaluate("k", "https://openrouter.ai", "hello", 1000, "openrouter");
+      expect(c.url).toBe("https://openrouter.ai/api/alpha/decisions");
+      expect(c.body.model).toBe("typesafe/jev-1.13");
+      for (const q of Object.values(c.body.questions as Record<string, any>)) { expect(q.type).toBe("noul"); expect(Object.keys(q.criteria).sort()).toEqual(["false", "true"]); }
+      expect(p!.isSecurityWork).toBe(0.7);
+    } finally { globalThis.fetch = real; }
+  });
+});

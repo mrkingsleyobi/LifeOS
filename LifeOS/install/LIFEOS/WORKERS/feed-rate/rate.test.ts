@@ -66,6 +66,14 @@ describe("provider wire formats", () => {
     expect(c.init.headers).toMatchObject({ "x-api-key": "k", "anthropic-version": "2023-06-01" });
     expect(b).toMatchObject({ model: "m2", system: "SYS", messages: [{ role: "user", content: "USR" }] });
   });
+  test("openrouter base URL asks for no-retention providers; plain OpenAI does not", async () => {
+    const bodies: any[] = [];
+    const f = (async (_u: string, init: any) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] })); }) as any;
+    await callModel({ RATER_MODEL: "anthropic/claude-haiku-5.5", RATER_API_KEY: "k", RATER_BASE_URL: "https://openrouter.ai/api/v1" }, "s", "u", f);
+    await callModel({ RATER_MODEL: "m", RATER_API_KEY: "k" }, "s", "u", f);
+    expect(bodies[0].provider).toEqual({ data_collection: "deny" });
+    expect(bodies[1]).not.toHaveProperty("provider");
+  });
   test("anthropic (Haiku 5.5): low effort, thinking headroom, no sampling params, skips thinking blocks", async () => {
     const c: { init?: any } = {};
     const f = (async (_u: string, init: any) => { c.init = init; return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "thinking", thinking: "" }, { type: "text", text: "{\"ok\":1}" }] })); }) as any;

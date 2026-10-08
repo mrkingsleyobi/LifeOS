@@ -48,12 +48,17 @@ export ROUTER_WORKER_TOKEN=<same token>
 Status: unit-tested with a mocked Jev, bundles to ~9 KB with no node imports, typechecks. **Not deployed** — no Cloudflare credentials in this session.
 
 ## Verification status
-Checked live on 2026-10-08 with the account's own credentials (read-only):
-- **OpenAI lane IDs: confirmed.** `gpt-6-astra`, `gpt-6.1-sol`, `gpt-5.6-terra`, `gpt-6-luna` all appear in the account's `GET /v1/models`. (`gpt-5.6-cyber`, the Helios pin, does **not** appear; it is a Trusted Access model that may be hidden from the list.)
-- **Jev: still unconfirmed.** The client supports both the native TypeSafe API (`TYPESAFE_API_KEY`, `/v1/systemone`, `noul`) and the Vercel gateway (`AI_GATEWAY_API_KEY`, `/v1/evaluate`, `boolean`). Live results: the native endpoint with the account's `TYPESAFE_API_KEY` returned **401 authentication_error**; the Vercel gateway with `AI_GATEWAY_API_KEY` authenticated but returned **403 `customer_verification_required`** ("requires a valid credit card on file"), and still did after a card was reportedly added (possibly a different Vercel team, or verification pending). Until a call succeeds every decision is `source: heuristic`.
+Checked live on 2026-10-08 with the account's own credentials:
+- **Jev: confirmed through OpenRouter.** `POST /api/alpha/decisions`, model `typesafe/jev-1.13`, `noul` questions with the required `criteria`. Bulk work routed to `luna`, a hard design question to `fable` at high effort (score 0.80), "say thanks" to `luna`, and a defensive-CTF security prompt to `cyber`, all with `source: jev` at roughly 500-700 ms (one cold call hit the 1.5 s timeout and fell back to the heuristic, as designed). The native TypeSafe key (`TYPESAFE_API_KEY`) still returned **401** and the Vercel gateway (`AI_GATEWAY_API_KEY`) **403 `customer_verification_required`**; both are supported but unconfirmed. Credential order is OpenRouter, native, gateway; `JEV_PROVIDER` forces one.
+- **OpenAI lane IDs: confirmed** in the account's `GET /v1/models` and in OpenRouter's catalog: `gpt-6-astra`, `gpt-6.1-sol`, `gpt-5.6-terra`, `gpt-6-luna`.
+- **`gpt-5.6-cyber` (Helios): not found in either catalog.** It is an OpenAI Trusted Access model, so it may be hidden; its pin is unverified. It is now a routable specialty lane (below).
+- OpenAI API calls currently fail with `insufficient_quota` (no API credits); a ChatGPT subscription does not add API credits, though it does cover the Codex CLI.
+
+## Specialty lane: cyber (Helios)
+Not part of the intelligence ladder. When Jev's `isSecurityWork` answer is at least 0.6 (`lanes.json` -> `specialtyLanes`) the prompt routes to `cyber` (agent Helios, `gpt-5.6-cyber`, fallback `sol` then `fable`). It is checked **after** the privacy gate and Jev's sensitivity flag, so security work that contains credentials or other sensitive material stays on Anthropic lanes. The router only routes: Helios itself refuses work without authorization context.
 
 ## Not verified yet — read before enabling anything
-1. **Jev**: see above. The native request shape comes from third-party write-ups, not TypeSafe's own API reference.
+1. **Jev native/gateway flavors**: see above. The native request shape comes from third-party write-ups, not TypeSafe's own API reference.
 2. **OmniRoute combo schema** comes from one third-party article. Verify field names and provider slugs against your OmniRoute version, then import `omniroute/combos.json`.
 3. **Enforcement is dispatch-time only.** A hook cannot change the main-loop model. Moving from shadow to enforce means the Algorithm dispatching `Agent(<Lane>)` per the decision, not the hook.
 4. **Weights are a first guess.** Compare `Router.ts audit` to what you actually needed, then tune `lanes.json`.

@@ -1,11 +1,11 @@
 /**
  * Jev — node-side client: finds a key (env or ~/.claude/.env) and delegates the wire call to JevCore.
- * TYPESAFE_API_KEY → native TypeSafe API; else AI_GATEWAY_API_KEY → Vercel gateway. JEV_BASE_URL overrides the host.
+ * Order: OPENROUTER_API_KEY, TYPESAFE_API_KEY (native), AI_GATEWAY_API_KEY (Vercel); JEV_PROVIDER=openrouter|native|gateway forces one. JEV_BASE_URL overrides the host.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { DEFAULT_BASE, evaluate, type Flavor } from "./JevCore";
+import { DEFAULT_BASE, evaluate, pickJev, type Flavor } from "./JevCore";
 import type { Probs } from "./Policy";
 
 export { QUESTIONS } from "./JevCore";
@@ -18,10 +18,8 @@ function fromDotenv(name: string): string | undefined {
 }
 
 export function jevCredentials(): { key: string; flavor: Flavor } | undefined {
-  const native = process.env.TYPESAFE_API_KEY || fromDotenv("TYPESAFE_API_KEY");
-  if (native) return { key: native, flavor: "native" };
-  const gw = process.env.AI_GATEWAY_API_KEY || fromDotenv("AI_GATEWAY_API_KEY");
-  return gw ? { key: gw, flavor: "gateway" } : undefined;
+  const pick = (n: string) => process.env[n] || fromDotenv(n);
+  return pickJev({ JEV_PROVIDER: pick("JEV_PROVIDER"), OPENROUTER_API_KEY: pick("OPENROUTER_API_KEY"), TYPESAFE_API_KEY: pick("TYPESAFE_API_KEY"), AI_GATEWAY_API_KEY: pick("AI_GATEWAY_API_KEY") });
 }
 
 export const jevConfigured = () => !!jevCredentials();

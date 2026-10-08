@@ -117,7 +117,7 @@ export const CLAUDE_ID_PATTERN = /claude-(opus|sonnet|haiku|fable)-\d+(?:-\d+)?(
  * lanes resolve via ClaudeTier aliases, OpenAI lanes via CROSS_VENDOR (same name as the agent).
  * Order is the statusline model-list order.
  */
-export interface Lane { agent: string; vendor: "anthropic" | "openai"; rank: number; ref: ClaudeTier | string }
+export interface Lane { agent: string; vendor: "anthropic" | "openai"; rank: number; ref: ClaudeTier | string; /** chosen by task type, not by intelligence score */ specialty?: boolean }
 export const LANES: Record<string, Lane> = {
   luna:  { agent: "Luna",  vendor: "openai",    rank: 1, ref: "luna" },
   terra: { agent: "Terra", vendor: "openai",    rank: 2, ref: "terra" },
@@ -125,6 +125,8 @@ export const LANES: Record<string, Lane> = {
   opus:  { agent: "Opus",  vendor: "anthropic", rank: 4, ref: "opus" },
   fable: { agent: "Fable", vendor: "anthropic", rank: 5, ref: "fable" },
   astra: { agent: "Astra", vendor: "openai",    rank: 6, ref: "astra" },
+  // Security specialty (Helios, OpenAI Trusted Access cyber model). Routed by task type; unverified in any public catalog.
+  cyber: { agent: "Helios", vendor: "openai",   rank: 3, ref: "helios", specialty: true },
 };
 
 /** Concrete model for a lane: Anthropic → tier alias, OpenAI → CROSS_VENDOR pin. */

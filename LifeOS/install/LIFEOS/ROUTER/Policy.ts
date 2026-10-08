@@ -10,6 +10,7 @@ export interface LanesConfig {
   weights: Record<string, number>;
   effort: { lowBelow: number; mediumBelow: number; highBelow: number };
   fallbackChains: Record<string, string[]>;
+  specialtyLanes?: Record<string, { question: string; threshold: number }>;
   fusion: { enabled: boolean; lanes: string[]; whenScoreAtLeast: number };
   privateLane: { allowedVendors: string[]; chain: string[] };
   jev: { timeoutMs: number; sensitiveThreshold: number };
@@ -88,6 +89,7 @@ export function heuristicProbs(prompt: string, f: Facts): Probs {
     bulkRepetitiveTemplated: has(/\b(sds|jds?|job descriptions?|batch|each of|for every|bulk|template)\b/),
     formatBoundFromGivenContent: has(/\b(summari[sz]e|extract|reformat|convert|translate|classify)\b/),
     simpleLookupOrChat: f.chars < 80 ? 0.8 : 0,
+    isSecurityWork: has(/\b(pentest|penetration test|vulnerabilit(y|ies)|exploit|malware|ctf|cve-\d|threat model|reverse engineer)\b/),
     isCodeChange: has(/\b(implement|fix|bug|function|refactor|test|code)\b/),
   };
 }
@@ -96,14 +98,16 @@ export function decide(p: Probs, f: Facts, source: "jev" | "heuristic", cfg: Lan
   const sensitive = (p.containsSensitiveOrPrivateData ?? 0) >= cfg.jev.sensitiveThreshold;
   if (sensitive) return privateDecision("Jev flagged sensitive content", cfg, "jev");
   const score = scoreOf(p, cfg);
-  const lane = laneFor(score, p, cfg);
+  // Specialty lanes win on task type (e.g. security work → cyber), after the sensitivity check above.
+  const specialty = Object.entries(cfg.specialtyLanes ?? {}).find(([, r]) => (p[r.question] ?? 0) >= r.threshold)?.[0];
+  const lane = specialty ?? laneFor(score, p, cfg);
   return {
     lane, score, source,
     effort: effortOf(score, f.depthWords, cfg),
     private: false,
     fusion: cfg.fusion.enabled && score >= cfg.fusion.whenScoreAtLeast,
     fallback: cfg.fallbackChains[lane] ?? [],
-    reason: `intelligence ${score.toFixed(2)} → ${lane}`,
+    reason: specialty ? `task type → ${lane}` : `intelligence ${score.toFixed(2)} → ${lane}`,
   };
 }
 

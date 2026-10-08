@@ -30,7 +30,12 @@ export async function callModel(env: ProviderEnv, system: string, user: string, 
     const res = await fetchFn(`${env.RATER_BASE_URL ?? "https://api.openai.com/v1"}/chat/completions`, {
       method: "POST", signal,
       headers: { Authorization: `Bearer ${env.RATER_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ model: env.RATER_MODEL, max_completion_tokens: 700, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: user }] }),
+      body: JSON.stringify({
+        model: env.RATER_MODEL, max_completion_tokens: 700, response_format: { type: "json_object" },
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        // OpenRouter is a broker: route only to providers that do not retain or train on the data (repo doctrine, OpenRouter.ts).
+        ...((env.RATER_BASE_URL ?? "").includes("openrouter.ai") ? { provider: { data_collection: "deny" } } : {}),
+      }),
     });
     if (!res.ok) throw new Error(`provider ${res.status}`);
     const text = ((await res.json()) as any)?.choices?.[0]?.message?.content;
