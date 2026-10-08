@@ -2154,9 +2154,9 @@ if [ "$MODE" = "normal" ]; then
     # attributed by dispatch-window overlap (principal 2026-08-06: SOL gets a
     # percentage like the rungs). mix_forge_used keeps the used-flag for a
     # dispatch whose rollout tokens can't be read.
-    mix_low=0; mix_medium=0; mix_high=0; mix_max=0; mix_forge=0; mix_forge_used=0; mix_cyber=0; mix_grok=0; mix_gemini=0
+    mix_low=0; mix_medium=0; mix_high=0; mix_max=0; mix_forge=0; mix_forge_used=0; mix_cyber=0; mix_grok=0; mix_gemini=0; mix_luna=0; mix_terra=0; mix_astra=0
     if [ -n "$session_id" ] && [ -n "$BUN_BIN" ]; then
-        eval "$("$BUN_BIN" "$LIFEOS_DIR/TOOLS/ModelMix.ts" --session "$session_id" 2>/dev/null | grep -E '^mix_(low|medium|high|max|forge|forge_used)=[0-9]+$')"
+        eval "$("$BUN_BIN" "$LIFEOS_DIR/TOOLS/ModelMix.ts" --session "$session_id" 2>/dev/null | grep -E '^mix_(low|medium|high|max|forge|forge_used|luna|terra|astra|cyber)=[0-9]+$')"
     fi
 
     # Three states, not two (principal 2026-07-27: "activate all the colored
@@ -2171,6 +2171,11 @@ if [ "$MODE" = "normal" ]; then
     if [ "$_rs_forge" = "0" ]; then
         { [ "$mix_forge" -gt 0 ] 2>/dev/null || [ "$mix_forge_used" = "1" ]; } && _rs_forge=1
     fi
+    # Per-lane OpenAI shares (measured from codex rollouts by model): a lane with measured tokens stays lit after its work ends.
+    [ "$_rs_luna"  = "0" ] && [ "$mix_luna"  -gt 0 ] 2>/dev/null && _rs_luna=1
+    [ "$_rs_terra" = "0" ] && [ "$mix_terra" -gt 0 ] 2>/dev/null && _rs_terra=1
+    [ "$_rs_astra" = "0" ] && [ "$mix_astra" -gt 0 ] 2>/dev/null && _rs_astra=1
+    [ "$_rs_cyber" = "0" ] && [ "$mix_cyber" -gt 0 ] 2>/dev/null && _rs_cyber=1
 
     # Escalating rung ladder (principal directive 2026-07-06): a rung renders DIM
     # unless it has been used. The escalation lives in the hue — HAIKU green →
@@ -2226,8 +2231,8 @@ if [ "$MODE" = "normal" ]; then
     _ar_line=""
     # Model lane order (principal 2026-10-08): HAIKU SONNET OPUS LUNA TERRA SOL ASTRA
     # GEMINI GROK CYBER FABLE. LUNA/TERRA/ASTRA are the OpenAI router lanes; SOL keeps
-    # the measured codex-rollout percentage (the mix bucket is OpenAI-wide, so it also
-    # carries Luna/Terra/Astra tokens until ModelMix learns per-lane attribution).
+    # the measured codex-rollout percentage; LUNA/TERRA/ASTRA/CYBER each carry their own measured share
+    # (ModelMix attributes each rollout by the model it names).
     # Lanes with no live dispatch light "used" from this session's agent types below.
     _sess_types=""
     for _d in "$HOME/.claude/projects"/*/"$session_id"/subagents; do
@@ -2245,10 +2250,10 @@ if [ "$MODE" = "normal" ]; then
     _ar_line+="$(_ar_tok "$_rs_low"   low    "$_lbl_low"  "$mix_low") "
     _ar_line+="$(_ar_tok "$_rs_med"   medium "$_lbl_med"  "$mix_medium") "
     _ar_line+="$(_ar_tok "$_rs_high"  high   "$_lbl_high" "$mix_high") "
-    _ar_line+="$(_ar_tok "$_rs_luna"  luna   "$_lbl_luna" "0") "
-    _ar_line+="$(_ar_tok "$_rs_terra" terra  "$_lbl_terra" "0") "
+    _ar_line+="$(_ar_tok "$_rs_luna"  luna   "$_lbl_luna" "$mix_luna") "
+    _ar_line+="$(_ar_tok "$_rs_terra" terra  "$_lbl_terra" "$mix_terra") "
     _ar_line+="$(_ar_tok "$_rs_forge" forge  "$_lbl_forge" "$mix_forge") "
-    _ar_line+="$(_ar_tok "$_rs_astra" astra  "$_lbl_astra" "0") "
+    _ar_line+="$(_ar_tok "$_rs_astra" astra  "$_lbl_astra" "$mix_astra") "
     _ar_line+="$(_ar_tok "$_rs_gemini" gemini "$_lbl_gemini" "$mix_gemini") "
     _ar_line+="$(_ar_tok "$_rs_grok" grok "$_lbl_grok" "$mix_grok") "
     _ar_line+="$(_ar_tok "$_rs_cyber" cyber "$_lbl_cyber" "$mix_cyber") "
