@@ -8,5 +8,5 @@
   // Calling this Worker is the opt-in; "on" lets it send REDACTED prompts (after the privacy gate) to Jev. Set "off" for heuristic-only.
   "vars": { "JEV_EGRESS": "on" }
   // Secrets (never in this file):  wrangler secret put ROUTER_TOKEN   |   wrangler secret put OPENROUTER_API_KEY   (or TYPESAFE_API_KEY / AI_GATEWAY_API_KEY; JEV_PROVIDER var forces one)
-  // Optional var: JEV_BASE_URL (default https://ai-gateway.vercel.sh)
+  // Optional var: JEV_BASE_URL. Default depends on the credential: openrouter.ai (OpenRouter), api.typesafe.ai (TypeSafe), ai-gateway.vercel.sh (Vercel). Only override it for the SAME provider as your key.
 }

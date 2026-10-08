@@ -32,11 +32,19 @@ async function viaWorker(prompt: string, timeoutMs: number): Promise<Decision | 
     const res = await fetch(`${url.replace(/\/$/, "")}/route`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt: redact(prompt) }), // redact BEFORE it leaves the machine: the Worker redacts again, but the raw text must never be sent
       signal: AbortSignal.timeout(timeoutMs),
     });
-    return res.ok ? ((await res.json()) as Decision) : null;
+    if (!res.ok) return null;
+    const d = (await res.json()) as Decision;
+    return validDecision(d) ? d : null; // a stale Worker or an error body must fall through to the local path, not be trusted
   } catch { return null; }
+}
+
+/** Shape check for a Decision that came over the wire (lane must be one we know, so laneModel() cannot throw later). */
+export function validDecision(d: any): d is Decision {
+  return !!d && typeof d === "object" && typeof d.lane === "string" && Object.prototype.hasOwnProperty.call(LANES, d.lane)
+    && Array.isArray(d.fallback) && typeof d.effort === "string" && typeof d.reason === "string" && typeof d.private === "boolean";
 }
 
 export async function resolve(prompt: string): Promise<Decision & { latencyMs: number }> {
@@ -77,7 +85,7 @@ if (import.meta.main) {
     const n = existsSync(SHADOW_LOG) ? readFileSync(SHADOW_LOG, "utf-8").split("\n").filter(Boolean).length : 0;
     console.log(JSON.stringify({ mode: loadConfig().mode, jevConfigured: jevConfigured(), jevEgress: jevEgressOn(loadConfig(), process.env.ROUTER_JEV_EGRESS), shadowLog: SHADOW_LOG, decisions: n }, null, 2));
   } else if (cmd === "audit") {
-    const rows = existsSync(SHADOW_LOG) ? readFileSync(SHADOW_LOG, "utf-8").split("\n").filter(Boolean).map(l => JSON.parse(l)) : [];
+    const rows = existsSync(SHADOW_LOG) ? readFileSync(SHADOW_LOG, "utf-8").split("\n").filter(Boolean).flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } }) : []; // one torn line must not lose the whole audit
     const by = (k: string) => rows.reduce((a: Record<string, number>, r) => ((a[r[k]] = (a[r[k]] ?? 0) + 1), a), {});
     const summary: Record<string, unknown> = { total: rows.length, lane: by("lane"), source: by("source"), effort: by("effort"), private: rows.filter(r => r.private).length, inline: rows.filter(r => r.inline).length };
     if (rest.includes("--compare")) {

@@ -41,7 +41,7 @@ export interface JevEnv { JEV_PROVIDER?: string; OPENROUTER_API_KEY?: string; TY
 export function pickJev(env: JevEnv): { key: string; flavor: Flavor } | undefined {
   const keys: Record<Flavor, string | undefined> = { openrouter: env.OPENROUTER_API_KEY, native: env.TYPESAFE_API_KEY, gateway: env.AI_GATEWAY_API_KEY };
   const forced = env.JEV_PROVIDER as Flavor | undefined;
-  if (forced && forced in keys) return keys[forced] ? { key: keys[forced]!, flavor: forced } : undefined;
+  if (forced && Object.prototype.hasOwnProperty.call(keys, forced)) return keys[forced] ? { key: keys[forced]!, flavor: forced } : undefined;
   for (const f of ["openrouter", "native", "gateway"] as Flavor[]) if (keys[f]) return { key: keys[f]!, flavor: f };
   return undefined;
 }
@@ -55,7 +55,7 @@ export async function evaluate(key: string, base: string, redactedPrompt: string
     }]),
   );
   try {
-    const res = await fetch(`${base}${sh.path}`, {
+    const res = await fetch(`${base.replace(/\/+$/, "")}${sh.path}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: sh.model, state: redactedPrompt, questions }),

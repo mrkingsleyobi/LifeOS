@@ -128,3 +128,26 @@ describe("the hook itself (subprocess, temp copy of the install)", () => {
     expect(fire(lifeos, dir, "ok").out).toBe("");
   });
 });
+
+describe("review fixes", () => {
+  const t = (sec: number) => new Date(Date.UTC(2026, 9, 8, 12, 0, sec)).toISOString();
+  test("the private-lane advice names every third-party agent the install allows", () => {
+    const d = privateDecision("credential", loadConfig());
+    for (const a of ["Forge", "CodexResearcher", "GeminiResearcher", "PerplexityResearcher", "Helios", "Grok"]) expect(advice(d)).toContain(a);
+  });
+  test("a dispatch is credited to the decision it followed, not to every earlier decision in the session", () => {
+    const c = compareDecisions([{ ts: t(0), session: "s", lane: "luna", inline: true }, { ts: t(120), session: "s", lane: "sol" }], [
+      { timestamp: t(130), event: "subagent_start", session_id: "s", subagent_type: "Sol" },
+    ]);
+    expect(c).toMatchObject({ withDispatch: 1, agreed: 1, inlineConsistent: 1 });
+  });
+  test("OmniRoute generation stops a chain at the first Anthropic step", async () => {
+    const { readFileSync, writeFileSync } = await import("node:fs");
+    const cfgPath = join(import.meta.dir, "lanes.json"), orig = readFileSync(cfgPath, "utf-8");
+    try {
+      const j = JSON.parse(orig); j.fallbackChains.sol = ["opus", "terra"]; writeFileSync(cfgPath, JSON.stringify(j));
+      const proc = Bun.spawnSync(["bun", join(import.meta.dir, "omniroute/Generate.ts")]);
+      expect(new TextDecoder().decode(proc.stdout)).toContain("lifeos-sol → (LifeOS fallback)");
+    } finally { writeFileSync(cfgPath, orig); Bun.spawnSync(["bun", join(import.meta.dir, "omniroute/Generate.ts")]); }
+  });
+});

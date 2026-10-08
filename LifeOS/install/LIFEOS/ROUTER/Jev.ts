@@ -10,15 +10,16 @@ import type { Probs } from "./Policy";
 
 export { QUESTIONS } from "./JevCore";
 
-function fromDotenv(name: string): string | undefined {
+/** Read the .env once per lookup and return a getter (this runs on every prompt via the hook). */
+function dotenv(): (name: string) => string | undefined {
   const f = join(process.env.HOME ?? homedir(), ".claude", ".env");
-  if (!existsSync(f)) return undefined;
-  const m = readFileSync(f, "utf-8").match(new RegExp(`^${name}=(.+)$`, "m"));
-  return m?.[1]?.trim().replace(/^["']|["']$/g, "");
+  const text = existsSync(f) ? readFileSync(f, "utf-8") : "";
+  return (name) => text.match(new RegExp(`^${name}=(.+)$`, "m"))?.[1]?.trim().replace(/^["']|["']$/g, "");
 }
 
 export function jevCredentials(): { key: string; flavor: Flavor } | undefined {
-  const pick = (n: string) => process.env[n] || fromDotenv(n);
+  let env: ((n: string) => string | undefined) | undefined;
+  const pick = (n: string) => process.env[n] || (env ??= dotenv())(n); // the file is only read if some variable is not already in the environment
   return pickJev({ JEV_PROVIDER: pick("JEV_PROVIDER"), OPENROUTER_API_KEY: pick("OPENROUTER_API_KEY"), TYPESAFE_API_KEY: pick("TYPESAFE_API_KEY"), AI_GATEWAY_API_KEY: pick("AI_GATEWAY_API_KEY") });
 }
 

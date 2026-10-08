@@ -21,13 +21,19 @@ export function compareDecisions(decisions: LoggedDecision[], events: DispatchEv
   const starts = events.filter((e) => e.event === "subagent_start" && e.session_id && e.subagent_type)
     .map((e) => ({ t: Date.parse(e.timestamp), s: e.session_id!, a: e.subagent_type! })).filter((e) => Number.isFinite(e.t)).sort((x, y) => x.t - y.t);
   const out: Comparison = { decisions: 0, withDispatch: 0, agreed: 0, inlineConsistent: 0, noDispatch: 0, agreementRate: null, byLane: {} };
+  // A dispatch belongs to the decision it followed, not to every earlier decision in the same session: bound the match
+  // window at that session's next decision.
+  const nextAt = new Map<string, number[]>();
+  for (const d of decisions) if (d.session && Number.isFinite(Date.parse(d.ts))) (nextAt.get(d.session) ?? nextAt.set(d.session, []).get(d.session)!).push(Date.parse(d.ts));
+  for (const ts of nextAt.values()) ts.sort((a, b) => a - b);
   for (const d of decisions) {
     const t0 = Date.parse(d.ts);
     if (!Number.isFinite(t0) || !d.session) continue;
     out.decisions++;
     const row = (out.byLane[d.lane] ??= { decisions: 0, agreed: 0, dispatchedOther: 0 });
     row.decisions++;
-    const hit = starts.find((e) => e.s === d.session && e.t >= t0 && e.t - t0 <= WINDOW_MS);
+    const tEnd = Math.min(t0 + WINDOW_MS, (nextAt.get(d.session) ?? []).find((t) => t > t0) ?? Infinity);
+    const hit = starts.find((e) => e.s === d.session && e.t >= t0 && e.t < tEnd);
     if (!hit) { if (d.inline || d.private) out.inlineConsistent++; else out.noDispatch++; continue; }
     out.withDispatch++;
     if ((LANE_AGENTS[d.lane] ?? []).some((a) => a.toLowerCase() === hit.a.toLowerCase())) { out.agreed++; row.agreed++; } else row.dispatchedOther++;

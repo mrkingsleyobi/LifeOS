@@ -21,7 +21,10 @@ const cfg = loadConfig();
 const enabled = (lane: string) => cfg.specialtyLanes?.[lane]?.enabled !== false;
 const isOpenAI = (lane: string) => LANES[lane]?.vendor === "openai" && enabled(lane);
 const combos = Object.keys(LANES).filter(isOpenAI).map((lane) => {
-  const next = (cfg.fallbackChains[lane] ?? []).find(isOpenAI);
+  // The chain ends at the first Anthropic step: that hand-off is LifeOS's, not the gateway's, so never skip past it to a later OpenAI lane.
+  const chain = cfg.fallbackChains[lane] ?? [];
+  const firstAnthropic = chain.findIndex((l) => LANES[l]?.vendor === "anthropic");
+  const next = (firstAnthropic < 0 ? chain : chain.slice(0, firstAnthropic)).find(isOpenAI);
   return {
     name: `lifeos-${lane}`,
     targets: [{ provider: "openai", model: laneModel(lane) }],

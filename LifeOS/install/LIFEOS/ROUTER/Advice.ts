@@ -6,7 +6,7 @@
 import { LANES, laneModel } from "../TOOLS/models";
 import type { Decision } from "./Policy";
 
-const OPENAI_GOOGLE_XAI = "Astra, Sol, Terra, Luna, Helios, Gemini, Grok";
+const OPENAI_GOOGLE_XAI = "Astra, Sol, Terra, Luna, Helios, Forge, Gemini, Grok, CodexResearcher, GeminiResearcher, PerplexityResearcher";
 
 export function advice(d: Decision): string {
   if (d.private) {
