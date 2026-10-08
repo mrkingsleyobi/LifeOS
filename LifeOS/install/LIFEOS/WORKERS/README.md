@@ -34,7 +34,12 @@ Alerts are the one place feed content reaches you, so: **flagged** (injection-ca
 - **Rules reality check:** the Feed doc says only `quality_score` is written in the live deployment; tier, importance and urgency are planned. A rule field an item lacks never matches, so until those exist most items route to `archive`. Add a `quality_score`-only rule to `rules.json` if you want that to change.
 - **Auth:** bearer token per Worker, constant-time compare. Tokens are secrets, never in `wrangler.jsonc`.
 
-## Deploy (not done — no Cloudflare credentials in the authoring session)
+## Deploy
+**One command:** `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… bash deploy.sh` (add `--dry-run` to print the steps). It is idempotent: it reuses the `amber` and `feed` D1 databases if they exist, applies the schemas, deploys all six Workers inert (no delivery channel, no rater key, no feed sources, empty email allowlist), and generates one access token per Worker into `.deploy-tokens.env` (mode 600, gitignored). The token needs Workers Scripts:Edit and D1:Edit.
+
+Status on 2026-10-08: the `amber` and `feed` databases were created in the author's account and **all four schemas ran successfully on real D1**. The Workers themselves were **not deployed**: the deploy step was blocked by the authoring session's permission classifier, so `deploy.sh` has only been dry-run.
+
+The manual steps it automates:
 ```bash
 cd synapse-capture
 wrangler d1 create amber                       # paste database_id into wrangler.jsonc
