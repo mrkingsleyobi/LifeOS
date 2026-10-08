@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Deploy the LifeOS Workers to Cloudflare. Idempotent: reuses D1 databases and re-deploys Workers.
 #
-#   CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... bash deploy.sh [--dry-run]
+#   CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... bash deploy.sh [--dry-run] [--skip-schema]
+#   --skip-schema: skip the D1 schema step (already applied; Cloudflare may throttle repeated D1 imports with error 971)
 #   (CF_API_TOKEN / CF_ACCOUNT_ID are accepted too.)
 #
 # The token needs: Workers Scripts:Edit, D1:Edit. (Queues only if you enable the optional queue.)
@@ -10,7 +11,8 @@
 # Turn things on afterwards with `wrangler secret put` (see README.md). Per-Worker access tokens are
 # generated here and written to ./.deploy-tokens.env (mode 600, gitignored); they are shown nowhere else.
 set -euo pipefail
-DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
+DRY=0; SKIP_SCHEMA=0
+for a in "$@"; do case "$a" in --dry-run) DRY=1;; --skip-schema) SKIP_SCHEMA=1;; esac; done
 export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-${CF_API_TOKEN:-}}" CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-${CF_ACCOUNT_ID:-}}"
 [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID" >&2; exit 2; }
 WR="bunx wrangler@4.143.1"            # pinned: a release a few weeks old, not whatever is newest
@@ -27,8 +29,9 @@ ensure_db() { local id; id="$(db_id "$1")"; if [ -z "$id" ]; then say "create D1
 
 if [ "$DRY" = 1 ]; then AMBER="<amber-id>"; FEED="<feed-id>"; else AMBER="$(ensure_db amber)"; FEED="$(ensure_db feed)"; fi
 
-say "apply schemas (idempotent: CREATE ... IF NOT EXISTS)"
 ADMIN="$(mktemp -d)"; trap 'rm -rf "$ADMIN"' EXIT
+if [ "$SKIP_SCHEMA" = 1 ]; then say "skip schemas (--skip-schema)"; else
+say "apply schemas (idempotent: CREATE ... IF NOT EXISTS)"
 cat > "$ADMIN/wrangler.jsonc" <<JSON
 { "name": "d1-admin", "compatibility_date": "2026-10-01", "d1_databases": [
   { "binding": "AMBER", "database_name": "amber", "database_id": "$AMBER" },
@@ -37,6 +40,7 @@ JSON
 ( cd "$ADMIN"
   run $WR d1 execute amber --remote -c wrangler.jsonc --file "$HERE/synapse-capture/schema.sql"
   for s in feed-ingest feed-rate feed-dispatch; do run $WR d1 execute feed --remote -c wrangler.jsonc --file "$HERE/$s/schema.sql"; done )
+fi
 
 touch "$TOKENS"; chmod 600 "$TOKENS"
 token_for() { # VAR -> value (generated once, reused on re-runs so existing clients keep working)

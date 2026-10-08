@@ -187,6 +187,25 @@ describe("digests", () => {
   });
 });
 
+describe("on-demand digest endpoint", () => {
+  const dig = (q: string, t = "tok") => worker.fetch(new Request(`https://x.test/digest${q}`, { method: "POST", headers: { Authorization: `Bearer ${t}` } }), env);
+  test("auth and priority validation", async () => {
+    expect((await dig("?priority=weekly", "bad")).status).toBe(401);
+    expect((await dig("")).status).toBe(400);
+    expect((await dig("?priority=hourly")).status).toBe(400);
+  });
+  test("sends the queued weekly digest once", async () => {
+    addRated({ tier: "B", imp: 7, title: "Worth a read" });
+    await dispatchTick(env, NOW, fakeFetch);
+    const realFetch = globalThis.fetch; globalThis.fetch = fakeFetch;
+    try {
+      expect(((await (await dig("?priority=weekly")).json()) as any).sent).toBe(1);
+      expect(((await (await dig("?priority=weekly")).json()) as any).sent).toBe(0);
+    } finally { globalThis.fetch = realFetch; }
+    expect(calls.some((c) => String(c.body.content ?? c.body.text).includes("Worth a read"))).toBe(true);
+  });
+});
+
 describe("endpoints", () => {
   test("auth, routing and healthz", async () => {
     const post = (t: string) => worker.fetch(new Request("https://x.test/dispatch", { method: "POST", headers: { Authorization: `Bearer ${t}` } }), env);

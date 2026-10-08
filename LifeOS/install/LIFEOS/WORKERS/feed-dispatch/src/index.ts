@@ -4,6 +4,7 @@
  *   cron every 10 min   dispatch: route newly rated items; send immediate alerts; queue digest items
  *   cron 08:00 daily    daily digest        cron 08:00 Mondays   weekly digest
  *   POST /dispatch   Authorization: Bearer $DISPATCH_TOKEN   (run a dispatch tick now)
+ *   POST /digest?priority=daily|weekly   same auth   (send that digest now)
  *   GET  /healthz
  *
  * Decides nothing itself: routing is feed-route's rules.json, imported as code (no HTTP hop).
@@ -104,8 +105,14 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(req.url);
     if (req.method === "GET" && pathname === "/healthz") return json({ ok: true, channels: channels(env) });
-    if (req.method !== "POST" || pathname !== "/dispatch") return json({ error: "not found" }, 404);
+    if (req.method !== "POST" || (pathname !== "/dispatch" && pathname !== "/digest")) return json({ error: "not found" }, 404);
     if (!authorized(req, env.DISPATCH_TOKEN)) return json({ error: "unauthorized" }, 401);
+    if (pathname === "/digest") {
+      // On-demand digest (the crons still send them at 08:00 UTC): POST /digest?priority=daily|weekly
+      const priority = new URL(req.url).searchParams.get("priority");
+      if (priority !== "daily" && priority !== "weekly") return json({ error: "priority must be daily or weekly" }, 400);
+      return json(await sendDigest(env, priority));
+    }
     return json(await dispatchTick(env));
   },
 
