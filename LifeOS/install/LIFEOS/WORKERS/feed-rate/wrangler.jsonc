@@ -10,7 +10,7 @@
   "d1_databases": [{ "binding": "DB", "database_name": "feed", "database_id": "REPLACE_WITH_D1_ID" }],
   "vars": {
     "RATER_PROVIDER": "openai",                       // OpenAI-compatible wire format ("anthropic" for the direct Anthropic API)
-    "RATER_BASE_URL": "https://openrouter.ai/api/v1", // verified live 2026-10-08 with Claude Haiku 5.5
-    "RATER_MODEL": "anthropic/claude-haiku-5.5"       // the secret RATER_API_KEY is then an OpenRouter key
+    "RATER_BASE_URL": "https://openrouter.ai/api/v1", // verified live 2026-10-08 with Luna (and Haiku 5.5)
+    "RATER_MODEL": "openai/gpt-6-luna"                 // the LOW lane: bulk, format-bound work. The secret RATER_API_KEY is then an OpenRouter key
   }
 }
