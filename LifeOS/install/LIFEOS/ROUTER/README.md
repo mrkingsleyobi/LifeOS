@@ -10,7 +10,7 @@ prompt → privacy gate (local, deterministic) ─ hit ─► private lane (Anth
               ▼
         Policy: intelligence score → band → lane (+ effort, fallback chain, fusion flag)
               ▼
-        MEMORY/OBSERVABILITY/router-shadow.jsonl   (hash + sizes, never the prompt)
+        MEMORY/OBSERVABILITY/router-shadow.jsonl   (a short hash and sizes, never the prompt text; short or common prompts like "yes" can be guessed from the hash)
 ```
 
 | File | Role |

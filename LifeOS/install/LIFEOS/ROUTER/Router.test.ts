@@ -143,7 +143,7 @@ describe("Jev credential picker + openrouter flavor", () => {
   });
 });
 
-import { resolve } from "./Router";
+import { resolve, validDecision } from "./Router";
 import { jevEgressOn } from "./Policy";
 
 describe("Jev egress is opt-in (privacy)", () => {
@@ -173,5 +173,32 @@ describe("Jev egress is opt-in (privacy)", () => {
     const gated = await resolve("my api_key=abcd1234efgh5678 stopped working");
     expect(gated.private).toBe(true);
     expect(calls()).toBe(1); // no second call: the gate fired before any network
+  });
+});
+
+describe("review fixes", () => {
+  const real = globalThis.fetch; const saved = { ...process.env };
+  afterEach(() => { globalThis.fetch = real; for (const k of ["ROUTER_WORKER_URL", "ROUTER_WORKER_TOKEN", "JEV_PROVIDER", "OPENROUTER_API_KEY"]) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } });
+  const good = { lane: "terra", effort: "medium", reason: "x", private: false, fallback: ["sol"], source: "heuristic" };
+
+  test("the edge Worker only ever receives the REDACTED prompt", async () => {
+    process.env.ROUTER_WORKER_URL = "https://w.example"; process.env.ROUTER_WORKER_TOKEN = "t";
+    let sent = "";
+    globalThis.fetch = (async (_u: any, init: any) => { sent = JSON.parse(init.body).prompt; return new Response(JSON.stringify(good)); }) as any;
+    await resolve("Email the summary to alice@example.com or call +1 415 555 0100 about https://example.com/doc");
+    expect(sent).toBe("Email the summary to [email] or call [number] about [url]");
+  });
+  test("a malformed or stale Worker answer is ignored and the local path decides", async () => {
+    process.env.ROUTER_WORKER_URL = "https://w.example"; process.env.ROUTER_WORKER_TOKEN = "t"; delete process.env.OPENROUTER_API_KEY;
+    for (const bad of [{ error: "nope" }, { ...good, lane: "gpt-9" }, { ...good, fallback: "sol" }, { ...good, lane: "constructor" }]) {
+      globalThis.fetch = (async () => new Response(JSON.stringify(bad))) as any;
+      const d = await resolve("Write 40 job descriptions from this template");
+      expect(d.source).toBe("heuristic");
+    }
+    expect(validDecision(good)).toBe(true); expect(validDecision(null)).toBe(false);
+  });
+  test("JEV_PROVIDER naming an Object.prototype member is ignored, not treated as a flavor", () => {
+    expect(pickJev({ JEV_PROVIDER: "constructor", OPENROUTER_API_KEY: "k" })).toEqual({ key: "k", flavor: "openrouter" });
+    expect(pickJev({ JEV_PROVIDER: "toString" })).toBeUndefined();
   });
 });

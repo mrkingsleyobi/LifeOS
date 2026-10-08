@@ -6,7 +6,7 @@
  * lanes.json "mode") it emits nothing on stdout and changes nothing. In `advise` mode it also injects ONE line of
  * advice into the session (built only from fixed strings; nothing from the prompt is echoed) and the session decides
  * whether to dispatch the lane agent; a hook cannot change the main-loop model. The log
- * (MEMORY/OBSERVABILITY/router-shadow.jsonl) holds a prompt hash and sizes, never the text.
+ * (MEMORY/OBSERVABILITY/router-shadow.jsonl) holds a short prompt hash and sizes, never the text (a short or common prompt can be guessed from its hash).
  *
  * Why shadow: a UserPromptSubmit hook cannot set the main loop's model, and the Jev wire format
  * has not yet been exercised live. Compare `bun LIFEOS/ROUTER/Router.ts audit` against what you
