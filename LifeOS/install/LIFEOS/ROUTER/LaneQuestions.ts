@@ -13,7 +13,7 @@
  * scorer weight in FrontDoor.ts reads it.
  */
 
-import type { NoulQ, ChoiceQ } from "../DECISIONS/Jev";
+import type { NoulQ, ChoiceQ } from "../DECISIONS/JevTypes";
 
 const n = (instructions: string): NoulQ => ({ type: "noul", instructions });
 

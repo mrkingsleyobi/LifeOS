@@ -16,7 +16,6 @@
 
 import { CLASS_RANK, type DataClass } from "../../hooks/lib/data-classification";
 import { LANES, type LaneId } from "./Lanes";
-import { exhausted } from "./Quota";
 
 export type Strategy = "tiered" | "combo" | "fusion" | "private";
 
@@ -37,10 +36,13 @@ export const FALLBACK: Record<LaneId, LaneId[]> = {
   private: ["private"],
 };
 
+/** Is this vendor (or the scoped Fable week) too spent to route to? Injected — Strategies does no I/O. */
+export type QuotaFn = (v: "anthropic" | "openai" | "fable") => boolean;
+
 export interface ChainCheck { lane: LaneId; ok: boolean; why?: string }
 
 /** Walk a lane's chain against the data class + live quota; first OK lane wins. */
-export function resolveChain(lane: LaneId, dataClass: DataClass, quota = exhausted): { pick: LaneId; chain: ChainCheck[] } {
+export function resolveChain(lane: LaneId, dataClass: DataClass, quota: QuotaFn = () => false): { pick: LaneId; chain: ChainCheck[] } {
   const chain: ChainCheck[] = [];
   for (const id of FALLBACK[lane]) {
     const l = LANES[id];

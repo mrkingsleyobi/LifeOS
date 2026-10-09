@@ -88,6 +88,9 @@ export const CONTAINMENT_ZONES: readonly ContainmentZone[] = [
     name: "private-infra",
     patterns: [
       "LIFEOS/ARBOL/**",
+      // This install's Cloudflare Workers (Arbol, Bunker health, Lockbox, router-edge,
+      // Errata intake) — real worker names, routes and service bindings; never ships.
+      "LIFEOS/CLOUDFLARE/**",
       "LIFEOS/PULSE/Assistant/state/**",
       "LIFEOS/PULSE/Plans/**",
       "LIFEOS/PULSE/logs/**",

@@ -249,6 +249,9 @@ function findNestedDependencyDirs(runtimeDst: string, skip: Set<string> = new Se
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.name === "node_modules" || entry.name === ".git") continue;
       const p = join(dir, entry.name);
+      // Cloudflare Workers are deployed by hand (`npm ci` in LIFEOS/CLOUDFLARE, see its
+      // README); wrangler + workerd are hundreds of MB no install should pull implicitly.
+      if (p === join(runtimeDst, "CLOUDFLARE")) continue;
       if (entry.isDirectory()) {
         walk(p);
       } else if (entry.isFile() && entry.name === "package.json") {
