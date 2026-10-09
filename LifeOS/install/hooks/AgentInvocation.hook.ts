@@ -61,7 +61,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { paiPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
-import { EFFORT_MODEL, CROSS_VENDOR } from '../LIFEOS/TOOLS/models';
+import { EFFORT_MODEL, CROSS_VENDOR, PRIVATE_LANE } from '../LIFEOS/TOOLS/models';
 import { liveModel } from './ModelRungGuard.hook';
 
 interface AgentToolInput {
@@ -86,6 +86,8 @@ function levelForModel(model: string): string {
  */
 function resolveDispatch(subagentType: string, inputModel?: string): { model: string; level: string } {
   const cvKey = subagentType.charAt(0).toLowerCase() + subagentType.slice(1);
+  // Private Pinned Lane: the work runs on the local llama.cpp model, not the wrapper's carrier.
+  if (cvKey === 'private') return { model: process.env.LIFEOS_PRIVATE_LANE_MODEL || PRIVATE_LANE.model, level: 'private-lane' };
   if (CROSS_VENDOR[cvKey]) return { model: CROSS_VENDOR[cvKey], level: 'cross-vendor' };
   if (inputModel) return { model: inputModel, level: levelForModel(inputModel) };
   try {

@@ -32,7 +32,15 @@ This file is the **routing table** — it tells you where everything lives. The 
 - Hooks — `Hooks/HookSystem.md`
 - Agents — `Agents/AgentSystem.md`
 - Delegation — `Delegation/DelegationSystem.md` (RETIRED — history only; agent orchestration is native harness surface: tool schemas + Algorithm §Spend election rules)
-- Router — `Router/RouterSystem.md` (RETIRED — history only; mode/tier classification was abolished and model rungs now live in `LIFEOS/TOOLS/models.ts`)
+- Router (v2 — Jev routes every prompt to a lane: Astra/Sol/Terra/Luna on OpenAI, Fable/Opus/Sonnet/Haiku on Anthropic, Gemini/Grok/Cyber specialists, Local private pinned lane; agents named for their model; `bun LIFEOS/ROUTER/Router.ts` `lanes|resolve|status|audit|run`) — `Router/RouterSystem.md`
+- Decisions (the judgment system: typed Jev questions → probability → act/do-not-act; caller registry, shadow/enforce, budgets, ledger; `bun LIFEOS/DECISIONS/Decisions.ts` `status|report|alerts|drift|callers`; Jev CLI `LIFEOS/DECISIONS/Jev.ts`; `Skill("Jev")`)
+- Errata (complaint ledger, verbatim; `/er`; `bun LIFEOS/ERRATA/Errata.ts`) · Socrates (standing questions, three-valued; `bun LIFEOS/SOCRATES/Socrates.ts`) · Achilles (vuln registry + KEV + SLA pings; `bun LIFEOS/ACHILLES/Achilles.ts`) · Vera (versioned ideal-state claim ledger; `bun LIFEOS/VERA/Vera.ts`) · People (one record per person; `bun LIFEOS/PEOPLE/People.ts`)
+- Bunker CLI (`bun LIFEOS/BUNKER/Bunker.ts test|sync-cloud|apps`) · Lockbox relay (`LIFEOS/LOCKBOX/Relay.ts`) · Cloudflare Workers for Arbol, Bunker health, Lockbox, router-edge, Errata intake — `LIFEOS/CLOUDFLARE/README.md`
+- Reconstruction registry (what upstream keeps private, what this install rebuilt) — `Reconstruction/UnshippedRegistry.md`
+- Synapse runtime (amber CLI: capture → journal → grade vs TELOS → route; `bun LIFEOS/SYNAPSE/Synapse.ts`; cloud journal `CLOUDFLARE/workers/amber-ledger`) · ISA: `LIFEOS/SYNAPSE/ISA.md`
+- Codex front door (`bun LIFEOS/CODEX/Mount.ts`) — `Codex/CodexFrontDoor.md` · Pi front door (`bun LIFEOS/PI/Mount.ts`) — `PI/PiFrontDoor.md`
+- Session restore (`/rs`, `bun LIFEOS/TOOLS/Sessions.ts`) — `Sessions/SessionRestore.md` · Ledger tooling (`/vb`, `skills/_LIFEOS`) · scheduled jobs (`bun LIFEOS/TOOLS/InstallSubsystemJobs.ts`)
+- ISAs — AS3 root `LIFEOS/AS3/ISA.md` rolls up ROUTER, DECISIONS, ERRATA, SOCRATES, ACHILLES, VERA, PEOPLE, SYNAPSE, LOCKBOX, BUNKER, CLOUDFLARE, CODEX, PI, SESSIONS, LEDGER (`bun LIFEOS/BUNKER/Bunker.ts test --isa LIFEOS/AS3/ISA.md`)
 - Security — `Security/README.md`
 - Notifications — `Notifications/NotificationSystem.md`
 - Observability — `Observability/ObservabilitySystem.md`

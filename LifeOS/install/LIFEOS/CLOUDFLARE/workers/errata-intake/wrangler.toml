@@ -1,0 +1,14 @@
+# errata-intake — the app door into the Errata complaint ledger (see src/index.ts)
+name = "lifeos-errata-intake"
+main = "src/index.ts"
+compatibility_date = "2026-09-15"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lifeos-errata"
+database_id = "REPLACE_WITH_D1_ID"   # wrangler d1 create lifeos-errata && wrangler d1 execute lifeos-errata --file workers/errata-intake/schema.sql --remote
+
+# Secrets:
+#   APP_KEYS     JSON map of per-app intake keys, e.g. {"surface":"k1","aiharnesses":"k2"}
+#   DRAIN_TOKEN  the laptop's token for POST /drain (LIFEOS_ERRATA_INTAKE_TOKEN)

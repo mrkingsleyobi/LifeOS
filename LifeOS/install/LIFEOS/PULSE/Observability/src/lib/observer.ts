@@ -49,6 +49,11 @@ const SCOPES: Record<string, ObserverScope> = {
   "/usage": "full", // spend
   "/performance": "full", // spend, session ids, paths
   "/synapse": "full", // private reading/bookmark titles
+  "/achilles": "full", // vulnerability findings against real assets
+  "/helios": "full", // offensive-security findings
+  "/socrates": "full", // standing questions name private sources
+  "/vera": "full", // people profiles
+  "/errata": "full", // verbatim complaints
   "/system/graph": "full", // named entities from knowledge archive
   "/projects": "full", // redirect → /work
   "/hypotheses": "full", // redirect → /upgrades
@@ -59,6 +64,7 @@ const SCOPES: Record<string, ObserverScope> = {
   "/arbol": "open",
   "/ledger": "open",
   "/upgrades": "open",
+  "/router": "open", // lanes, models, quotas — no prompt text is ever stored
   "/docs": "open",
 };
 
