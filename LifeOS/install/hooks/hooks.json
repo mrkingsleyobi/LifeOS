@@ -297,6 +297,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "$HOME/.claude/hooks/RouterFrontDoor.hook.ts",
+            "timeout": 6
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "$HOME/.claude/hooks/PromptProcessing.hook.ts",
             "timeout": 30,
             "async": true

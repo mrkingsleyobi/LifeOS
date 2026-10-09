@@ -1392,7 +1392,7 @@ render_usage_meter() {
 }
 
 # ACTIVE-ladder rung colors, shared by the context bar — EXACT RGBs from
-# _ar_rung_c's LIVE tones below, so the bar and the roster can never disagree
+# _lane_rgb's base tones (roster block below), so the bar and the roster can never disagree
 # on what a model's color is.
 BAR_C_LOW='\033[38;2;74;222;128m'    # HAIKU  green-400
 BAR_C_MED='\033[38;2;59;130;246m'    # SONNET blue-500
@@ -1400,7 +1400,7 @@ BAR_C_HIGH='\033[38;2;239;68;68m'    # OPUS   red-500
 BAR_C_MAX='\033[38;2;168;85;247m'    # FABLE  purple-500
 
 # Fallback hue when no session mix exists yet — the session model's rung.
-# Patterns mirror _pm_roster_states; unknown → the bar's historical green.
+# Patterns mirror _lane_of_model; unknown → the bar's historical green.
 case "$model_name" in
     *[Hh]aiku*)  MODEL_BAR_COLOR="$BAR_C_LOW"  ;;
     *[Ss]onnet*) MODEL_BAR_COLOR="$BAR_C_MED"  ;;
@@ -2015,77 +2015,49 @@ printf "${SLATE_400}LifeOS:${RESET} ${LIFEOS_A}${LIFEOS_VERSION}${RESET} ${SLATE
 #   GROK            — live xAI dispatch (Grok agent → CROSS_VENDOR.grok), matched
 #     on the resolved model string; PUBLIC-data lane, no mix percentage.
 #
-# _pm_roster_states: pure, unit-testable. Args: $1 session model, $2 space-joined
-# live dispatch models, $3 fable-verified flag (0/1), $4 dispatch-executes-fable
-# (true/false). Echoes 5 states in fixed rung order "max high medium low forge"
-# — 2 = live now, 0 = idle (dim). Several rungs can be live at once.
-_pm_roster_states() {
-    local _session="$1" _live="$2" _fable="$3" _df="$4"
-    local s_max=0 s_high=0 s_med=0 s_low=0 s_forge=0 s_cyber=0 s_grok=0 s_gemini=0 m
-    [ "$_fable" = "1" ] && s_max=2
-    # The session (main-loop) model is ALWAYS active — light its rung whether or
-    # not any agent is dispatched. This is what "ACTIVE" answers: the model you're
-    # talking to right now, plus any live dispatches layered on top.
-    case "$_session" in
-        *[Hh]aiku*)  s_low=2 ;;
-        *[Ss]onnet*) s_med=2 ;;
-        *[Ff]able*)  s_max=2 ;;
-        *[Oo]pus*)   s_high=2 ;;
+# ── MODELS + AGENTS + ROUTER (2026-10-09 Router/Jev rebuild) ─────────────────
+# Three lines:
+#   models  HAIKU SONNET OPUS LUNA TERRA SOL ASTRA GEMINI GROK CYBER FABLE LOCAL
+#   agents  ASTRA FABLE OPUS SOL TERRA LUNA GEMINI GROK HELIOS
+#   🧭 ROUTER: SOL · HIGH · high · tiered · delegate · Jev (p 0.76) · 0.34s
+#
+# Every token has four states, brightest wins:
+#   3 ROUTED  — the Router's current pick for THIS session (last decision <10 min):
+#               lane + combo reviewer + fusion panel. Bold + underline.
+#   2 LIVE    — a dispatch on that model is running now (agent-starts.json /
+#               live subagent transcripts, 300s window). Bold.
+#   1 USED    — the session spent tokens there (ModelMix.ts) or the Router sent
+#               work there earlier (MEMORY/STATE/router/sessions/<sid>.json). Plain.
+#   0 idle    — dim tint.
+# Lane ids, labels and order come from LIFEOS/ROUTER/Lanes.ts; agents are named
+# for their model, so a lane id, its agent file and its token are one word.
+#
+# _lane_of_model: map one resolved model string → lane id. Pure, unit-testable.
+_lane_of_model() {
+    case "$1" in
+        *cyber*)                         echo cyber ;;
+        *astra*)                         echo astra ;;
+        *terra*)                         echo terra ;;
+        *luna*)                          echo luna ;;
+        *-sol*|*sol)                     echo sol ;;
+        *gpt-*)                          echo sol ;;     # unknown OpenAI → the workhorse rung
+        *grok*)                          echo grok ;;
+        *gemini*)                        echo gemini ;;
+        *qwen*|*gemma*|*llama*|*gguf*|private) echo private ;;
+        *haiku*)                         echo haiku ;;
+        *sonnet*)                        echo sonnet ;;
+        *fable*)                         echo fable ;;
+        *opus*)                          echo opus ;;
+        *)                               echo "" ;;
     esac
-    for m in $_live; do
-        case "$m" in
-            *cyber*)        s_cyber=2 ;;
-            *grok*)         s_grok=2 ;;
-            *gemini*)       s_gemini=2 ;;
-            *gpt-*)         s_forge=2 ;;
-            *haiku*)        s_low=2 ;;
-            *sonnet*)       s_med=2 ;;
-            *fable*)        if [ "$_df" = "true" ]; then s_max=2; else s_high=2; fi ;;
-            *opus*)         s_high=2 ;;
-            inherited)
-                case "$_session" in
-                    *[Hh]aiku*)  s_low=2 ;;
-                    *[Ss]onnet*) s_med=2 ;;
-                    *[Ff]able*)  if [ "$_df" = "true" ]; then s_max=2; else s_high=2; fi ;;
-                    *)           s_high=2 ;;  # opus, unknown
-                esac ;;
-            *)              s_high=2 ;;
-        esac
-    done
-    printf '%s %s %s %s %s %s %s %s' "$s_max" "$s_high" "$s_med" "$s_low" "$s_forge" "$s_cyber" "$s_grok" "$s_gemini"
 }
 
 if [ "$MODE" = "normal" ]; then
-    # Resolve rung → model NAME from models.ts (same source the AgentInvocation
-    # hook reads). Fallbacks keep the line honest if models.ts is unreadable in
-    # a hook-spawn context.
     _pm_models_ts="$LIFEOS_DIR/TOOLS/models.ts"
-    _em_block=$(sed -n '/export const EFFORT_MODEL/,/^}/p' "$_pm_models_ts" 2>/dev/null)
-    _em_lookup() { printf '%s' "$_em_block" | sed -n "s/^[[:space:]]*$1:[[:space:]]*\"\([a-z0-9-]*\)\".*/\1/p" | head -1 | tr '[:lower:]' '[:upper:]'; }
-    _lbl_max=$(_em_lookup max);    _lbl_max="${_lbl_max:-FABLE}"
-    _lbl_high=$(_em_lookup high);  _lbl_high="${_lbl_high:-OPUS}"
-    _lbl_med=$(_em_lookup medium); _lbl_med="${_lbl_med:-SONNET}"
-    _lbl_low=$(_em_lookup low);    _lbl_low="${_lbl_low:-HAIKU}"
-    # Cross-vendor label: codename suffix only — "SOL", not "GPT-5.6 SOL"
-    # (principal 2026-08-06: SOL sits in the rung list between OPUS and FABLE;
-    # supersedes the 2026-07-27 full-carrier-name directive). The underlying
-    # pin in models.ts is untouched.
-    _cv_block=$(sed -n '/export const CROSS_VENDOR/,/^}/p' "$_pm_models_ts" 2>/dev/null)
-    _cv_lookup() { printf '%s' "$_cv_block" | sed -n "s/^[[:space:]]*$1:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1 | sed 's/.*-//' | tr '[:lower:]' '[:upper:]'; }
-    _lbl_forge=$(_cv_lookup forge);         _lbl_forge="${_lbl_forge:-SOL}"
-    _lbl_cyber="CYBER"
-    # GROK/GEMINI labels are hardcoded like CYBER — _cv_lookup's suffix-split
-    # would render CROSS_VENDOR "grok-4.6" as "4.6", which reads as nothing.
-    _lbl_grok="GROK"
-    _lbl_gemini="GEMINI"
-    # Carrier fact from models.ts (CarrierProbe.ts-maintained): decides whether
-    # fable-labeled/-inherited dispatches light FABLE or OPUS. Unreadable → false
-    # (conservative: never claim Fable ran without the fact in hand).
     _dispatch_fable=$(sed -n 's/^export const DISPATCH_EXECUTES_FABLE = \([a-z]*\).*/\1/p' "$_pm_models_ts" 2>/dev/null)
     _dispatch_fable="${_dispatch_fable:-false}"
 
-    # Live dispatch models in the 300s window (unique resolved-model strings;
-    # pre-v1.3.1 entries lack .model → treated as inherited).
+    # ── live dispatch models + agent types (300s window) ──
     _agent_starts="$LIFEOS_DIR/MEMORY/OBSERVABILITY/agent-starts.json"
     _live_models=""
     _live_types=""
@@ -2094,155 +2066,128 @@ if [ "$MODE" = "normal" ]; then
             [to_entries[] | .value | select(.epoch > $cutoff)
              | (.model // "inherited")] | unique | join(" ")
         ' "$_agent_starts" 2>/dev/null)
-        # Agent TYPES in the same window — feeds the MAX/FORGE agent panel.
         _live_types=$(jq -r --argjson cutoff "$(( (NOW_EPOCH - 300) * 1000 ))" '
             [to_entries[] | .value | select(.epoch > $cutoff)
              | (.subagent_type // "")] | unique | join(" ")
         ' "$_agent_starts" 2>/dev/null)
     fi
-    # Background/mailbox agents (2026-07-13): PostToolUse fires at spawn for
-    # these, so agent-starts.json can't track them. Harness ground truth
-    # instead: a subagents/agent-*.jsonl transcript whose mtime advanced in
-    # the last 2 min IS a live agent; its .meta.json carries the model. Depth
-    # is fixed (projects/<slug>/<session>/subagents/*), so the find is bounded
-    # (~30ms). Run ONCE; _bg_transcripts/_bg_count are reused by ▸ LIVE below.
+    # Background/mailbox agents: live subagent transcripts (mtime <2min). Run ONCE;
+    # _bg_transcripts/_bg_count are reused by ▸ LIVE below.
     _bg_transcripts=$(find "$HOME/.claude/projects" -mindepth 4 -maxdepth 4 -path '*/subagents/agent-*.jsonl' -mmin -2 2>/dev/null)
     _bg_count=0
-    _bg_models=""
     while IFS= read -r _bg_t; do
         [ -z "$_bg_t" ] && continue
         _bg_count=$((_bg_count + 1))
         _bg_meta="${_bg_t%.jsonl}.meta.json"
         if [ -f "$_bg_meta" ]; then
-            _bg_models="$_bg_models $(jq -r '.model // "inherited"' "$_bg_meta" 2>/dev/null)"
+            _live_models="$_live_models $(jq -r '.model // "inherited"' "$_bg_meta" 2>/dev/null)"
             _live_types="$_live_types $(jq -r '(.agentType // "") + " " + (.customAgentType // "")' "$_bg_meta" 2>/dev/null)"
         fi
     done <<< "$_bg_transcripts"
-    [ -n "$_bg_models" ] && _live_models="$_live_models$_bg_models"
-    # FABLE rung: a verified-executed Fable inference in the window. ISO-8601
-    # UTC timestamps compare lexicographically, so string > is a time compare.
-    _mv_file="$LIFEOS_DIR/MEMORY/OBSERVABILITY/model-verification.jsonl"
-    _fable_recent=0
-    if [ -f "$_mv_file" ]; then
-        _mv_cut=$(date -u -r $(( NOW_EPOCH - 300 )) +%Y-%m-%dT%H:%M:%S 2>/dev/null)
-        _mv_hits=$(tail -20 "$_mv_file" 2>/dev/null | jq -s -r --arg cut "$_mv_cut" '
-            [.[] | select((.ts // "") > $cut) | select(.executed // "" | test("fable"))] | length
-        ' 2>/dev/null)
-        [ "${_mv_hits:-0}" -gt 0 ] 2>/dev/null && _fable_recent=1
-    fi
 
-    read -r _rs_max _rs_high _rs_med _rs_low _rs_forge _rs_cyber _rs_grok _rs_gemini \
-        <<< "$(_pm_roster_states "$model_name" "$_live_models" "$_fable_recent" "$_dispatch_fable")"
-    _rs_cyber="${_rs_cyber:-0}"
-    _rs_grok="${_rs_grok:-0}"
-    _rs_gemini="${_rs_gemini:-0}"
+    # State table: one variable per lane, _ls_<lane> ∈ {0,1,2,3}.
+    for _l in haiku sonnet opus luna terra sol astra gemini grok cyber fable private; do eval "_ls_$_l=0"; done
+    _lane_bump() { local _v="_ls_$1"; [ -n "$1" ] && [ "${!_v:-0}" -lt "$2" ] && eval "$_v=$2"; }
 
-    # SESSION MIX (principal 2026-07-27) — the rung ladder alone answers "what is
-    # running right now"; it cannot answer the question actually being asked of
-    # it: is the system genuinely dipping into the top rung when the work earns
-    # it, or riding the default all session? ModelMix.ts reads the harness
-    # transcripts (main loop + every subagent) and returns each rung's share of
-    # output tokens — real billed carriers, so a silently-downgraded dispatch
-    # reports the model that truly ran. Incremental by byte offset, so this stays
-    # ~30ms on a multi-MB session. All five buckets share ONE denominator and
-    # sum to 100 — SOL's tokens are measured from codex's own rollout logs,
-    # attributed by dispatch-window overlap (principal 2026-08-06: SOL gets a
-    # percentage like the rungs). mix_forge_used keeps the used-flag for a
-    # dispatch whose rollout tokens can't be read.
-    mix_low=0; mix_medium=0; mix_high=0; mix_max=0; mix_forge=0; mix_forge_used=0; mix_cyber=0; mix_grok=0; mix_gemini=0
+    # USED: session token mix (ModelMix.ts). OpenAI tokens are measured as one pool.
+    mix_low=0; mix_medium=0; mix_high=0; mix_max=0; mix_forge=0; mix_forge_used=0
     if [ -n "$session_id" ] && [ -n "$BUN_BIN" ]; then
         eval "$("$BUN_BIN" "$LIFEOS_DIR/TOOLS/ModelMix.ts" --session "$session_id" 2>/dev/null | grep -E '^mix_(low|medium|high|max|forge|forge_used)=[0-9]+$')"
     fi
+    [ "$mix_low" -gt 0 ] 2>/dev/null    && _lane_bump haiku 1
+    [ "$mix_medium" -gt 0 ] 2>/dev/null && _lane_bump sonnet 1
+    [ "$mix_high" -gt 0 ] 2>/dev/null   && _lane_bump opus 1
+    [ "$mix_max" -gt 0 ] 2>/dev/null    && _lane_bump fable 1
 
-    # Three states, not two (principal 2026-07-27: "activate all the colored
-    # labels that have been used in this particular section"). A rung the
-    # session actually spent tokens on stays lit after its work ends — the
-    # ladder becomes a record of the session's mix, not just a live probe.
-    #   0 unused this session → dim    1 used earlier → color    2 live now → BOLD
-    [ "$_rs_low"   = "0" ] && [ "$mix_low"    -gt 0 ] 2>/dev/null && _rs_low=1
-    [ "$_rs_med"   = "0" ] && [ "$mix_medium" -gt 0 ] 2>/dev/null && _rs_med=1
-    [ "$_rs_high"  = "0" ] && [ "$mix_high"   -gt 0 ] 2>/dev/null && _rs_high=1
-    [ "$_rs_max"   = "0" ] && [ "$mix_max"    -gt 0 ] 2>/dev/null && _rs_max=1
-    if [ "$_rs_forge" = "0" ]; then
-        { [ "$mix_forge" -gt 0 ] 2>/dev/null || [ "$mix_forge_used" = "1" ]; } && _rs_forge=1
+    # USED + ROUTED: the Router's per-session state.
+    _router_line=""
+    _router_sess="$LIFEOS_DIR/MEMORY/STATE/router/sessions/${session_id}.json"
+    if [ -n "$session_id" ] && [ -f "$_router_sess" ]; then
+        _rt_used=$(jq -r '.lanes // {} | keys | join(" ")' "$_router_sess" 2>/dev/null)
+        for _l in $_rt_used; do _lane_bump "$_l" 1; done
+        eval "$(jq -r --argjson now "$((NOW_EPOCH * 1000))" '
+            .last as $d | if $d == null then "" else
+              "_rt_age=" + ((($now - ($d.at // 0)) / 1000) | floor | tostring) + "\n" +
+              "_rt_routed=" + ([$d.lane, ($d.combo.reviewer // empty), (($d.fusion.members // [])[]), ($d.fusion.synthesizer // empty)] | join(" ") | @sh) + "\n" +
+              "_rt_text=" + ("🧭 ROUTER: " + $d.label + " · " + ($d.tier | ascii_upcase) + " · " + $d.effort + " · "
+                  + (if $d.strategy == "combo" then "combo " + ($d.combo.producer | ascii_upcase) + "→" + ($d.combo.reviewer | ascii_upcase)
+                     elif $d.strategy == "fusion" then "fusion " + (($d.fusion.members // []) | map(ascii_upcase) | join("+")) + "→" + ($d.fusion.synthesizer | ascii_upcase)
+                     else $d.strategy end)
+                  + " · " + (if $d.mode == "enforce" then "delegate" else "advise" end)
+                  + " · " + (if $d.source == "jev" then "Jev (p " + (($d.p * 100 | round) / 100 | tostring) + ")" else $d.source end)
+                  + " · " + ((($d.latencyMs // 0) / 10 | round) / 100 | tostring) + "s" | @sh)
+            end' "$_router_sess" 2>/dev/null)"
+        if [ -n "${_rt_age:-}" ] && [ "$_rt_age" -le 600 ] 2>/dev/null; then
+            for _l in $_rt_routed; do _lane_bump "$_l" 3; done
+        fi
+        [ -n "${_rt_age:-}" ] && [ "$_rt_age" -le 1800 ] 2>/dev/null && _router_line="$_rt_text"
     fi
 
-    # Escalating rung ladder (principal directive 2026-07-06): a rung renders DIM
-    # unless it has been used. The escalation lives in the hue — HAIKU green →
-    # SONNET blue → OPUS red → SOL cyan (OpenAI cross-vendor, in-list per
-    # principal 2026-08-06) → FABLE purple. Untouched rungs show only a faint,
-    # dark tint; live rungs pop in full BOLD. No strong colors on untouched
-    # rungs, ever.
-    _ar_rung_c() {  # $1=rung(low|medium|high|max|forge) $2=state(2 live | 1 used | else dim)
-        case "$1:$2" in
-            low:2)    printf '\033[1;38;2;74;222;128m'  ;;  # LIVE: bold green-400
-            low:1)    printf '\033[38;2;60;190;110m'    ;;  # USED: plain green
-            low:*)    printf '\033[2;38;2;86;164;110m'   ;;  # dim: muted green tint
-            medium:2) printf '\033[1;38;2;59;130;246m'  ;;  # LIVE: bold blue-500
-            medium:1) printf '\033[38;2;70;140;225m'    ;;  # USED: plain blue
-            medium:*) printf '\033[2;38;2;90;130;185m'   ;;  # dim: muted blue tint
-            high:2)   printf '\033[1;38;2;239;68;68m'   ;;  # LIVE: bold red-500
-            high:1)   printf '\033[38;2;215;80;80m'     ;;  # USED: plain red
-            high:*)   printf '\033[2;38;2;180;95;95m'    ;;  # dim: muted red tint
-            max:2)    printf '\033[1;38;2;168;85;247m'  ;;  # LIVE: bold purple-500 — apex
-            max:1)    printf '\033[38;2;155;95;225m'    ;;  # USED: plain purple
-            max:*)    printf '\033[2;38;2;150;110;195m'  ;;  # dim: muted purple tint
-            forge:2)  printf '\033[1;38;2;103;232;249m' ;;  # LIVE: bold cyan — OpenAI cross-vendor
-            forge:1)  printf '\033[38;2;95;200;215m'    ;;  # USED: plain cyan
-            forge:*)  printf '\033[2;38;2;85;160;175m'   ;;  # dim: muted cyan tint
-            cyber:2)  printf '\033[1;38;2;236;72;153m'  ;;  # LIVE: bold pink — CYBER lane
-            cyber:1)  printf '\033[38;2;200;60;130m'    ;;  # USED: plain pink
-            cyber:*)  printf '\033[2;38;2;150;85;120m'   ;;  # dim: muted pink tint
-            grok:2)   printf '\033[1;38;2;250;204;21m'  ;;  # LIVE: bold yellow — GROK public lane
-            grok:1)   printf '\033[38;2;210;175;30m'    ;;  # USED: plain yellow
-            grok:*)   printf '\033[2;38;2;160;140;70m'   ;;  # dim: muted yellow tint
-            gemini:2) printf '\033[1;38;2;249;115;22m'  ;;  # LIVE: bold orange — GEMINI public lane
-            gemini:1) printf '\033[38;2;215;105;35m'    ;;  # USED: plain orange
-            gemini:*) printf '\033[2;38;2;165;110;70m'   ;;  # dim: muted orange tint
+    # LIVE: the session model + every live dispatch.
+    _sess_lane=$(_lane_of_model "$(printf '%s' "$model_name" | tr '[:upper:]' '[:lower:]')")
+    _lane_bump "$_sess_lane" 2
+    for _m in $_live_models; do
+        if [ "$_m" = "inherited" ]; then _lane_bump "$_sess_lane" 2; continue; fi
+        _ml=$(_lane_of_model "$_m")
+        # Fable-labelled dispatches light FABLE only when dispatch really executes Fable.
+        [ "$_ml" = "fable" ] && [ "$_dispatch_fable" != "true" ] && _ml=opus
+        _lane_bump "$_ml" 2
+    done
+    # FABLE: a verified-executed Fable inference in the window (Inference.ts post-hoc proof).
+    _mv_file="$LIFEOS_DIR/MEMORY/OBSERVABILITY/model-verification.jsonl"
+    if [ -f "$_mv_file" ]; then
+        _mv_cut=$(date -u -r $(( NOW_EPOCH - 300 )) +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -u -d "@$(( NOW_EPOCH - 300 ))" +%Y-%m-%dT%H:%M:%S 2>/dev/null)
+        _mv_hits=$(tail -20 "$_mv_file" 2>/dev/null | jq -s -r --arg cut "$_mv_cut" '
+            [.[] | select((.ts // "") > $cut) | select(.executed // "" | test("fable"))] | length' 2>/dev/null)
+        [ "${_mv_hits:-0}" -gt 0 ] 2>/dev/null && _lane_bump fable 2
+    fi
+    # Old OpenAI pool usage (Forge/CodexResearcher) with no per-lane attribution → SOL.
+    { [ "$mix_forge" -gt 0 ] 2>/dev/null || [ "$mix_forge_used" = "1" ]; } && _lane_bump sol 1
+
+    # Token colors: one base RGB per lane; state derives the treatment.
+    _lane_rgb() {
+        case "$1" in
+            haiku)   echo "74;222;128" ;;    # green-400
+            sonnet)  echo "59;130;246" ;;    # blue-500
+            opus)    echo "239;68;68" ;;     # red-500
+            luna)    echo "147;197;253" ;;   # blue-300 — the moon
+            terra)   echo "52;211;153" ;;    # emerald-400 — the earth
+            sol)     echo "103;232;249" ;;   # cyan-300 — OpenAI workhorse (was the SOL/forge cyan)
+            astra)   echo "244;114;182" ;;   # pink-400 — the stars
+            gemini)  echo "249;115;22" ;;    # orange-500
+            grok)    echo "250;204;21" ;;    # yellow-400
+            cyber)   echo "163;230;53" ;;    # lime-400 — terminal green
+            fable)   echo "168;85;247" ;;    # purple-500 — apex
+            private) echo "148;163;184" ;;   # slate-400 — the vault
+            *)       echo "148;163;184" ;;
         esac
     }
-    # $4 = session share. Rendered in the rung's own USED tone so the number reads
-    # as belonging to its label, while the label keeps the bold when live. A 0%
-    # rung prints no number at all — an unused rung should be silent, not noisy.
-    _ar_tok() {  # $1=state $2=rung $3=label $4=pct
-        printf "%b%s${RESET}" "$(_ar_rung_c "$2" "$1")" "$3"
-        [ "${4:-0}" -gt 0 ] 2>/dev/null && printf "%b %s%%${RESET}" "$(_ar_rung_c "$2" 1)" "$4"
+    _lane_tok() {  # $1=lane $2=label $3=state $4=pct
+        local rgb r g b
+        rgb=$(_lane_rgb "$1"); IFS=';' read -r r g b <<< "$rgb"
+        case "$3" in
+            3) printf '\033[1;4;38;2;%sm%s\033[0m' "$rgb" "$2" ;;
+            2) printf '\033[1;38;2;%sm%s\033[0m' "$rgb" "$2" ;;
+            1) printf '\033[38;2;%d;%d;%dm%s\033[0m' "$((r*85/100))" "$((g*85/100))" "$((b*85/100))" "$2" ;;
+            *) printf '\033[2;38;2;%d;%d;%dm%s\033[0m' "$((r*65/100))" "$((g*65/100))" "$((b*65/100))" "$2" ;;
+        esac
+        [ "${4:-0}" -gt 0 ] 2>/dev/null && printf ' \033[38;2;%d;%d;%dm%s%%\033[0m' "$((r*85/100))" "$((g*85/100))" "$((b*85/100))" "$4"
     }
-    # "ACTIVE:" label removed (principal 2026-08-12) — the ladder is self-evident.
-    _ar_line=""
-    _ar_line+="$(_ar_tok "$_rs_low"   low    "$_lbl_low"  "$mix_low") "
-    _ar_line+="$(_ar_tok "$_rs_med"   medium "$_lbl_med"  "$mix_medium") "
-    _ar_line+="$(_ar_tok "$_rs_high"  high   "$_lbl_high" "$mix_high") "
-    # SOL sits in the list between OPUS and FABLE (principal 2026-08-06; the
-    # old behind-the-divider "+GPT-5.6 SOL" engine slot is retired), with a
-    # measured percentage from codex rollout logs sharing the rungs' denominator.
-    _ar_line+="$(_ar_tok "$_rs_forge" forge  "$_lbl_forge" "$mix_forge") "
-    # GEMINI lane: Google public-data agents (agents/Gemini.md + GeminiResearcher,
-    # both matching *gemini* on resolved models). Same two-state shape as GROK —
-    # no local token logs, so no mix percentage.
-    _ar_line+="$(_ar_tok "$_rs_gemini" gemini "$_lbl_gemini" "$mix_gemini") "
-    # GROK lane: xAI public-data agent (agents/Grok.md, CROSS_VENDOR.grok).
-    # PUBLIC data ceiling — non-sensitive dispatches only. Lights live via the
-    # agent-starts model match (*grok*); no mix percentage because unlike SOL
-    # there are no local token logs to measure, so mix_grok stays 0 and the
-    # lane is dim/live two-state until a measurement source exists.
-    _ar_line+="$(_ar_tok "$_rs_grok" grok "$_lbl_grok" "$mix_grok") "
-    # CYBER lane: the agent behind it is private, so its identity (detection
-    # regex + panel label) loads from a USER-zone overlay that never ships.
-    # No overlay → no lane; a public install renders MAX/FORGE only.
-    _cyber_agent_re=""; _cyber_agent_lbl=""
-    _cyber_overlay="$HOME/.claude/LIFEOS/USER/CUSTOMIZATIONS/StatusLineCyberLane.sh"
-    [ -f "$_cyber_overlay" ] && . "$_cyber_overlay"
-    [ -n "$_cyber_agent_lbl" ] && _ar_line+="$(_ar_tok "$_rs_cyber" cyber "$_lbl_cyber" "$mix_cyber") "
-    _ar_line+="$(_ar_tok "$_rs_max"   max    "$_lbl_max"  "$mix_max")"
 
-    # ── MAX / FORGE agent panel (principal 2026-08-06): the two named heavy-
-    # analysis AGENTS render behind a pipe in their identity colors
-    # (agents/Max.md #A855F7 purple, agents/Forge.md #B45309 amber), with the
-    # SAME three-state treatment as the model rungs — dim idle, plain when
-    # used this session, bold when live — so one glance says whether the
-    # agents ran, right next to which models did. Live = agent-starts or bg
-    # meta types in the 300s window; used = this session's subagent metas.
+    # ── models line ──
+    _ar_line=""
+    for _pair in haiku:HAIKU:$mix_low sonnet:SONNET:$mix_medium opus:OPUS:$mix_high luna:LUNA:0 terra:TERRA:0 sol:SOL:0 astra:ASTRA:0 gemini:GEMINI:0 grok:GROK:0 cyber:CYBER:0 fable:FABLE:$mix_max private:LOCAL:0; do
+        IFS=: read -r _l _lbl _pct <<< "$_pair"
+        _v="_ls_$_l"
+        _ar_line+="$(_lane_tok "$_l" "$_lbl" "${!_v:-0}" "$_pct") "
+    done
+    # OpenAI tokens are measured as one pool (codex rollouts) — one share for the ladder.
+    [ "$mix_forge" -gt 0 ] 2>/dev/null && _ar_line+="${SLATE_600}·${RESET} $(_lane_tok sol OAI 1 "$mix_forge")"
+    printf "%b\n" "$_ar_line"
+
+    # ── agents line: agents are named for their model, lit by the same lane state
+    #    plus live/used agent TYPES (an agent whose wrapper is running lights even
+    #    before its model string is known).
     _sess_types=""
     for _d in "$HOME/.claude/projects"/*/"$session_id"/subagents; do
         if [ -d "$_d" ]; then
@@ -2251,31 +2196,18 @@ if [ "$MODE" = "normal" ]; then
             break
         fi
     done
-    _st_max=0; _st_forge=0; _st_cyber=0
-    printf '%s' "$_live_types" | grep -qiE '(^| )max( |$)'   && _st_max=2
-    printf '%s' "$_live_types" | grep -qiE '(^| )forge'      && _st_forge=2
-    [ -n "$_cyber_agent_re" ] && printf '%s' "$_live_types" | grep -qiE "$_cyber_agent_re" && _st_cyber=2
-    [ "$_st_max" = "0" ]    && printf '%s' "$_sess_types" | grep -qiE '(^| )max( |$)' && _st_max=1
-    [ "$_st_forge" = "0" ]  && printf '%s' "$_sess_types" | grep -qiE '(^| )forge'    && _st_forge=1
-    [ -n "$_cyber_agent_re" ] && [ "$_st_cyber" = "0" ] && printf '%s' "$_sess_types" | grep -qiE "$_cyber_agent_re" && _st_cyber=1
-    _ag_c() {  # $1=agent(max|forge|cyber) $2=state(2 live | 1 used | else dim)
-        case "$1:$2" in
-            max:2)    printf '\033[1;38;2;168;85;247m'  ;;  # LIVE: bold identity purple
-            max:1)    printf '\033[38;2;155;95;225m'    ;;  # USED: plain purple
-            max:*)    printf '\033[2;38;2;150;110;195m'  ;;  # dim: muted purple tint
-            forge:2)  printf '\033[1;38;2;245;158;11m'  ;;  # LIVE: bold bright amber
-            forge:1)  printf '\033[38;2;180;83;9m'      ;;  # USED: identity amber
-            forge:*)  printf '\033[2;38;2;150;105;60m'   ;;  # dim: muted amber tint
-            cyber:2)  printf '\033[1;38;2;239;68;68m'  ;;  # LIVE: bold identity red
-            cyber:1)  printf '\033[38;2;220;38;38m'    ;;  # USED: identity red
-            cyber:*)  printf '\033[2;38;2;150;70;70m'   ;;  # dim: muted red tint
-        esac
-    }
-    _ar_line+=" ${SLATE_600}│${RESET} "
-    _ar_line+="$(printf '%bMAX%b' "$(_ag_c max "$_st_max")" "$RESET") "
-    _ar_line+="$(printf '%bFORGE%b' "$(_ag_c forge "$_st_forge")" "$RESET") "
-    [ -n "$_cyber_agent_lbl" ] && _ar_line+="$(printf '%b%s%b' "$(_ag_c cyber "$_st_cyber")" "$_cyber_agent_lbl" "$RESET")"
-    printf "%b\n" "$_ar_line"
+    _ag_line="${SLATE_400}⟡${RESET} "
+    for _pair in astra:Astra fable:Fable opus:Opus sol:Sol terra:Terra luna:Luna gemini:Gemini grok:Grok cyber:Helios; do
+        IFS=: read -r _l _agent <<< "$_pair"
+        _v="_ls_$_l"; _st="${!_v:-0}"
+        printf '%s' "$_live_types" | grep -qiE "(^| )${_agent}( |$)" && [ "$_st" -lt 2 ] && _st=2
+        [ "$_st" = "0" ] && printf '%s' "$_sess_types" | grep -qiE "(^| )${_agent}( |$)" && _st=1
+        _ag_line+="$(_lane_tok "$_l" "$(printf '%s' "$_agent" | tr '[:lower:]' '[:upper:]')" "$_st" 0) "
+    done
+    printf "%b\n" "$_ag_line"
+
+    # ── router line ──
+    [ -n "$_router_line" ] && printf "${SLATE_400}%s${RESET}\n" "$_router_line"
 fi
 
 # Live IN-FLIGHT dispatches — written by AgentInvocation.hook.ts at PreToolUse:Agent,
@@ -2730,6 +2662,9 @@ elif [ "${usage_state:-absent}" != "absent" ]; then
         fi
         _bar_scoped=$(render_usage_meter "$usage_scoped_int" "$_rsc_txt")
         scoped_fmt=" ${_scoped_label_color}${usage_scoped_name}${RESET} ${_bar_scoped}"
+    else
+        # No scoped Fable window reported — keep the FB slot so the bar set never shifts.
+        scoped_fmt=" ${_reset_color}FB${RESET} $(render_usage_meter 0 "n/a")"
     fi
     # Billing source indicator — colored = actively billing, slate-dim = inactive.
     # Three-way: SUB (subscription), EXT (Anthropic extra usage credits), API
@@ -2769,6 +2704,34 @@ elif [ "${usage_state:-absent}" != "absent" ]; then
     printf '%b' "${_5h_label_color}5H${RESET} ${_bar_5h} ${_7d_label_color}WK${RESET} ${_bar_7d}${scoped_fmt} ${_billing_fmt}"
     [ -n "$stale_suffix" ] && printf '%b' "$stale_suffix"
     printf "\n"
+
+    # ── OpenAI subscription (codex) — weekly window + plan, from codex rollout
+    # logs via LIFEOS/ROUTER/Quota.ts (cache-only on the render path; a stale
+    # cache refreshes in the background so the tick never waits on bun).
+    _oai_cache="$STATUSLINE_LOCAL_STATE/openai-usage.json"
+    _oai_age=999999
+    [ -f "$_oai_cache" ] && _oai_age=$(( NOW_EPOCH - $(get_mtime "$_oai_cache") ))
+    if [ "$_oai_age" -gt 60 ] && [ -n "$BUN_BIN" ]; then
+        ( "$BUN_BIN" "$LIFEOS_DIR/ROUTER/Quota.ts" --fresh >/dev/null 2>&1 & )
+    fi
+    if [ -f "$_oai_cache" ]; then
+        eval "$(jq -r '
+            "oai_wk=" + ((.q.week.pct // 0) | tostring) + "\n" +
+            "oai_wk_reset=" + ((.q.week.resetsAt // 0) | tostring) + "\n" +
+            "oai_present=" + ((.q.week != null or .q.fiveHour != null) | tostring) + "\n" +
+            "oai_plan=" + ((.q.plan // "") | @sh)
+        ' "$_oai_cache" 2>/dev/null)"
+        if [ "${oai_present:-false}" = "true" ] || [ -n "${oai_plan:-}" ]; then
+            _oai_rst=""
+            if [ "${oai_wk_reset:-0}" -gt "$NOW_EPOCH" ] 2>/dev/null; then
+                _oai_rs=$(reset_time_str "$oai_wk_reset")
+                _oai_rst=$(_bar_rst "${_oai_rs%%@*}" "${_oai_rs#*@}")
+            fi
+            _oai_c='\033[38;2;103;232;249m'   # OpenAI cyan (the SOL lane tone)
+            printf '%b' "${_oai_c}WK${RESET} $(render_usage_meter "${oai_wk:-0}" "$_oai_rst") ${_oai_c}${oai_plan:-OPENAI}${RESET}"
+            printf "\n"
+        fi
+    fi
     sep
 fi
 
