@@ -14,7 +14,7 @@
   },
   {
     "title": "Stand up the Private Pinned Lane (llama.cpp + Qwen3.8-27B on loopback)",
-    "body": "The Router pins sensitive prompts to the `private` lane, but there's no local model running yet. `PrivateLane.ts health` fails, so private-lane work currently stops by design instead of falling back to the cloud.\n\n**Done when**\n- [ ] `llama-server -m <Qwen3.8-27B GGUF> --host 127.0.0.1 --port 8080 -c 32768 --jinja` runs, ideally as a launchd/systemd job\n- [ ] `bun LIFEOS/ROUTER/PrivateLane.ts health` returns `ok: true`\n- [ ] `echo 'summarize: test' \\| bun LIFEOS/ROUTER/Router.ts run private` answers locally\n- [ ] Socrates and Synapse personal grading succeed through the lane"
+    "body": "The Router pins sensitive prompts to the `private` lane, but there's no local model running yet. `PrivateLane.ts health` fails, so private-lane work currently stops by design instead of falling back to the cloud.\n\n**Done when**\n- [ ] `llama-server -m <Qwen3.8-27B GGUF> --host 127.0.0.1 --port 8080 -c 32768 --jinja` runs, ideally as a launchd/systemd job\n- [ ] `bun LIFEOS/ROUTER/PrivateLane.ts health` returns `ok: true`\n- [ ] `echo 'summarize: test' | bun LIFEOS/ROUTER/Router.ts run private` answers locally\n- [ ] Socrates and Synapse personal grading succeed through the lane"
   },
   {
     "title": "Deploy the Cloudflare Workers (bunker-health, arbol, router-edge, errata-intake, lockbox, amber-ledger)",
@@ -82,7 +82,7 @@
   },
   {
     "title": "Label router outcomes, then decide on promoting the shadow callers",
-    "body": "`dispatch-advisor` enforces on a principal override, not a measured agreement rate. `satisfaction-capture` and `socrates-answer` are in SHADOW. The Router's scorer is hand-weighted.\n\n**Done when**\n- [ ] At least 100 router decisions are labeled with `bun LIFEOS/DECISIONS/Decisions.ts outcome <id> agree\\|disagree`\n- [ ] `Decisions.ts report` shows each caller's agreement; promote with `enforce <caller> --agreement N --model jev-1.13` where it's earned\n- [ ] At ≥500 labeled rows, train lane and effort models from `decisions.jsonl` to replace the hand weights (ROUTER ISA Remaining Work)"
+    "body": "`dispatch-advisor` enforces on a principal override, not a measured agreement rate. `satisfaction-capture` and `socrates-answer` are in SHADOW. The Router's scorer is hand-weighted.\n\n**Done when**\n- [ ] At least 100 router decisions are labeled with `bun LIFEOS/DECISIONS/Decisions.ts outcome <id> agree|disagree`\n- [ ] `Decisions.ts report` shows each caller's agreement; promote with `enforce <caller> --agreement N --model jev-1.13` where it's earned\n- [ ] At ≥500 labeled rows, train lane and effort models from `decisions.jsonl` to replace the hand weights (ROUTER ISA Remaining Work)"
   },
   {
     "title": "Cut the release with /vb",
