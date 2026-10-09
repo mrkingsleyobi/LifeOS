@@ -19,7 +19,7 @@
 
 import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { homedir } from "os";
 import { args, lifeosDir } from "../TOOLS/lib/Ledger";
 import { parseTestStrategy, compileCurl, runProbe, type Probe } from "../CLOUDFLARE/shared/probes";
@@ -31,6 +31,31 @@ const expand = (p: string) => p.replace(/^~(?=\/)/, homedir());
 export function loadApps(): App[] {
   try { return JSON.parse(readFileSync(join(lifeosDir(), "USER", "CONFIG", "bunker.json"), "utf-8")); }
   catch { return []; }
+}
+
+export interface ProbeRow { isc: string; check: string; status: "pass" | "fail" | "skip"; detail: string }
+
+/** Run an ISA's deterministic rows. Returns the per-probe results (eval/manual → skip). */
+export async function runIsa(isaPath: string, quiet = false): Promise<ProbeRow[]> {
+  const out: ProbeRow[] = [];
+  const log = (s: string) => { if (!quiet) console.log(s); };
+  const rows = parseTestStrategy(readFileSync(isaPath, "utf-8"));
+  for (const r of rows) {
+    if (r.type === "eval" || r.type === "manual") { out.push({ isc: r.isc, check: r.check, status: "skip", detail: r.type === "eval" ? "eval → EvalRunner" : "manual → principal attests" }); continue; }
+    let ok = false, detail = "";
+    if (r.type === "curl") {
+      const p = compileCurl(r);
+      if (p) { const res = await runProbe(p); ok = res.ok; detail = res.detail ?? `${res.status} ${res.ms}ms`; } else detail = "uncompilable curl row";
+    } else {
+      const cmd = r.type.startsWith("bun-") && !/^bun\b/.test(r.tool) ? `bun test ${r.tool}` : r.tool;
+      const sh = spawnSync("bash", ["-c", cmd], { encoding: "utf-8", timeout: r.tier === "deep" ? 600_000 : 60_000, cwd: dirname(isaPath) });
+      ok = sh.status === 0;
+      detail = ok ? "exit 0" : `exit ${sh.status}: ${(sh.stderr || sh.stdout || "").trim().split("\n").at(-1)?.slice(0, 120)}`;
+    }
+    out.push({ isc: r.isc, check: r.check, status: ok ? "pass" : "fail", detail });
+    log(`${ok ? "✓" : "✗"} ${r.isc.padEnd(8)} ${r.type.padEnd(8)} ${r.check.slice(0, 60)}${ok ? "" : `  — ${detail}`}`);
+  }
+  return out;
 }
 
 async function test(isaPath: string): Promise<boolean> {
@@ -74,8 +99,31 @@ async function syncCloud() {
   if (!r.ok) process.exit(1);
 }
 
-if (import.meta.main) {
-  const { pos: [cmd], flags } = args();
+/** `bunker data` — the snapshot the Pulse Bunker tab renders (modules/bunker.ts contract). */
+async function data() {
+  const shots = join(homedir(), ".config", "LIFEOS", "USER", "PULSE", "Bunker", "shots");
+  const apps = [];
+  for (const a of loadApps()) {
+    const isa = expand(a.isa);
+    const probes = existsSync(isa) ? await runIsa(isa, true) : [];
+    let og = false, favicon = false;
+    try {
+      const html = await (await fetch(a.url, { signal: AbortSignal.timeout(8000) })).text();
+      og = /<meta[^>]+property=["']og:image["']/i.test(html);
+      favicon = (await fetch(new URL("/favicon.ico", a.url), { method: "HEAD", signal: AbortSignal.timeout(5000) })).ok || /rel=["'][^"']*icon/i.test(html);
+    } catch {}
+    apps.push({
+      name: a.app, type: a.type, dir: dirname(isa), isaPath: isa, url: a.url,
+      pass: probes.filter((p) => p.status === "pass").length, fail: probes.filter((p) => p.status === "fail").length, skip: probes.filter((p) => p.status === "skip").length,
+      og, favicon, shot: existsSync(join(shots, `${a.app}.png`)), probes,
+    });
+  }
+  const probesPass = apps.reduce((n, a) => n + a.pass, 0), probesTotal = apps.reduce((n, a) => n + a.pass + a.fail, 0);
+  console.log(JSON.stringify({ apps, summary: { apps: apps.length, green: apps.filter((a) => a.fail === 0 && a.pass > 0).length, probesPass, probesTotal, manual: apps.reduce((n, a) => n + a.skip, 0) } }));
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const { pos: [cmd], flags } = args(argv);
   switch (cmd) {
     case "test": {
       const targets = flags.isa ? [flags.isa] : loadApps().filter((a) => !flags.app || a.app === flags.app).map((a) => expand(a.isa));
@@ -86,8 +134,11 @@ if (import.meta.main) {
     }
     case "sync-cloud": await syncCloud(); break;
     case "apps": for (const a of loadApps()) console.log(`${a.app.padEnd(20)} ${a.type.padEnd(14)} ${a.url}`); break;
+    case "data": await data(); break;
     default:
-      console.error("usage: Bunker.ts test|sync-cloud|apps");
+      console.error("usage: Bunker.ts test|sync-cloud|apps|data");
       process.exit(2);
   }
 }
+
+if (import.meta.main) await main();

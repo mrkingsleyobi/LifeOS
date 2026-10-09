@@ -290,6 +290,15 @@
             "command": "$HOME/.claude/hooks/IntegrityCheck.hook.ts"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/WorkSync.hook.ts",
+            "timeout": 60
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

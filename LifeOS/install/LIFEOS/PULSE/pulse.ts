@@ -88,6 +88,7 @@ let telosModule: any = null
 let tabFreshnessModule: any = null
 let hypothesesModule: any = null
 let upgradesModule: any = null
+let ledgersModule: any = null  // Router · Achilles · Helios · Socrates · Vera · Errata
 let memoryModule: any = null
 let conduitModule: any = null
 let menubarModule: any = null
@@ -321,6 +322,16 @@ async function loadModules(config: PulseConfig) {
       if (usageModule.start) await usageModule.start()
     } catch (err) {
       log("warn", "Usage module not available", { error: String(err) })
+    }
+  }
+  // Router / Achilles / Helios / Socrates / Vera / Errata — the rebuilt subsystem
+  // ledgers. One module serves all six; each tab is gated by its own key below.
+  if (["router", "achilles", "helios", "socrates", "vera", "errata"].some((k) => config.modules[k])) {
+    try {
+      ledgersModule = await import("./modules/lifeos-ledgers")
+      if (ledgersModule.start) await ledgersModule.start()
+    } catch (err) {
+      log("warn", "LifeOS ledgers module not available", { error: String(err) })
     }
   }
   // Bunker — application-harness registry surface (reads ~/.claude/LIFEOS/PULSE/Bunker via its CLI).
@@ -934,6 +945,11 @@ async function main() {
       if (hypothesesModule && pathname.startsWith("/api/hypotheses")) {
         const resp = await hypothesesModule.handleRequest(req, pathname)
         if (resp) return resp
+      }
+
+      // Rebuilt subsystem ledgers: /api/{router,achilles,helios,socrates,vera,errata}
+      if (ledgersModule && ledgersModule.handles(pathname) && config.modules[pathname.split("/")[2]]) {
+        return await ledgersModule.handleRequest(req, pathname)
       }
 
       // Upgrades API: /api/upgrades[/...] — the unified system-improvement
