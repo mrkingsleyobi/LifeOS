@@ -310,6 +310,7 @@ function SessionExpanded({ s, bare = false }: { s: AlgorithmState; bare?: boolea
 // ─── Expanded view for a tracked run ───
 
 function ClimbExpanded({ s, bare = false }: { s: AlgorithmState; bare?: boolean }) {
+  const counts = claimCounts(s);
   const claims = s.criteria.filter((c) => c.type !== "anti-criterion");
   const guards = s.criteria.filter((c) => c.type === "anti-criterion");
   // bare: render as a plain always-open panel (the spotlight). The 0→auto
@@ -336,7 +337,7 @@ function ClimbExpanded({ s, bare = false }: { s: AlgorithmState; bare?: boolean 
           </div>
         )}
 
-        <IsaMetaDetail meta={s.meta} done={claimCounts(s).done} total={claimCounts(s).total} />
+        <IsaMetaDetail meta={s.meta} done={counts.done} total={counts.total} />
 
         {s.intent && !s.criteria.length && (
           <p className="text-sm text-ink-2 leading-relaxed" data-sensitive>{s.intent}</p>

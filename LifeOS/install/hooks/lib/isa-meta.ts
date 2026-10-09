@@ -28,6 +28,7 @@ export interface IsaMeta {
   verificationCount?: number;
 }
 
+// Keep these caps in step with Observability/src/lib/isa-meta.ts (sanitizeMeta), which re-applies them on the UI side.
 const CAPS = { line: 400, short: 200, cap: 40, capName: 60, decisions: 8, verification: 12 };
 
 /** One line, no control characters, capped. */
@@ -44,10 +45,22 @@ function scalar(block: string, key: string): string | undefined {
   const m = block.match(new RegExp(`^${key}:[ \\t]*(.*)$`, "m"));
   if (!m) return undefined;
   let v = m[1].trim();
-  // strip a trailing YAML comment (` # ...`) that is not inside quotes
-  if (!/^["']/.test(v)) v = v.replace(/\s+#.*$/, "");
-  else { const q = v[0]; const end = v.indexOf(q, 1); if (end > 0) v = v.slice(1, end); }
-  v = v.replace(/^["']|["']$/g, "");
+  if (/^[>|][+-]?\d*$/.test(v)) {                       // block scalar: `>` folded or `|` literal; the text is the indented lines below
+    const rest = block.slice((m.index ?? 0) + m[0].length).split(/\r?\n/).slice(1);
+    const body: string[] = [];
+    for (const l of rest) { if (l.trim() === "" ) { body.push(""); continue; } if (!/^[ \t]+/.test(l)) break; body.push(l.trim()); }
+    v = (v.startsWith(">") ? body.join(" ") : body.join("\n")).trim();
+  } else if (v[0] === '"') {                            // double-quoted: honour backslash escapes
+    let out = "", i = 1;
+    for (; i < v.length && v[i] !== '"'; i++) {
+      if (v[i] === "\\" && i + 1 < v.length) { i++; out += v[i] === "n" ? " " : v[i] === "t" ? " " : v[i]; } else out += v[i];
+    }
+    v = out;
+  } else if (v[0] === "'") {                            // single-quoted: '' is a literal quote
+    let out = "", i = 1;
+    for (; i < v.length; i++) { if (v[i] === "'") { if (v[i + 1] === "'") { out += "'"; i++; } else break; } else out += v[i]; }
+    v = out;
+  } else v = v.replace(/\s+#.*$/, "");                  // plain scalar: strip a trailing comment
   return v === "" || v === "null" || v === "~" ? undefined : v;
 }
 
@@ -55,27 +68,36 @@ function scalar(block: string, key: string): string | undefined {
 function list(block: string, key: string): string[] {
   const inline = block.match(new RegExp(`^${key}:[ \\t]*\\[(.*?)\\]`, "m"));
   if (inline) return inline[1].split(",").map(x => x.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
-  const m = block.match(new RegExp(`^${key}:[ \\t]*\\r?\\n((?:[ \\t]+-[^\\n]*\\r?\\n?)+)`, "m"));
+  const m = block.match(new RegExp(`^${key}:[ \\t]*\\r?\\n((?:[ \\t]*-[^\\n]*\\r?\\n?)+)`, "m"));
   if (!m) return [];
-  return m[1].split(/\r?\n/).map(l => l.replace(/^[ \t]+-[ \t]*/, "").replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "")).filter(Boolean);
+  return m[1].split(/\r?\n/).map(l => l.replace(/^[ \t]*-[ \t]*/, "").replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "")).filter(Boolean);
 }
+
+/** Fenced code blocks are quoted material, not structure: a `## Decisions` inside one must not be read as the real section. */
+const stripFences = (s: string) => s.replace(/^(```|~~~)[^\n]*\n[\s\S]*?(?:^\1[ \t]*$|(?![\s\S]))/gm, "");
 
 /** Body of an H2 section (`## Name`), up to the next H2 or EOF. */
 function section(content: string, name: string): string | null {
-  const m = content.match(new RegExp(`^##[ \\t]+${name}[ \\t]*\\r?\\n([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`, "mi"));
+  const m = stripFences(content).match(new RegExp(`^##[ \\t]+${name}[ \\t]*\\r?\\n([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`, "mi"));
   return m ? m[1] : null;
 }
 
-const bullets = (body: string) => body.split(/\r?\n/).filter(l => /^\s*[-*]\s+\S/.test(l)).map(l => l.replace(/^\s*[-*]\s+/, ""));
+/** Top-level bullets only: an indented sub-bullet continues the entry above it, it is not a new entry. */
+const bullets = (body: string) => body.split(/\r?\n/).filter(l => /^[-*]\s+\S/.test(l)).map(l => l.replace(/^[-*]\s+/, ""));
 
 export function parseVerdict(lines: string[]): Verdict | undefined {
-  // Last matching line wins (a re-audit supersedes an earlier one). Requires "audit" and a verdict word on the same line.
+  // Last audit line wins (a re-audit supersedes an earlier one). Only the text AFTER the word "audit" counts, split into
+  // clauses; a verdict word negated by "no/zero/0/without" ("no concerns") is not a verdict, and an unfinished audit has none.
   for (const l of [...lines].reverse()) {
-    if (!/\baudit\b/i.test(l)) continue;
-    const m = l.match(/\b(pass(?:ed)?|concerns?|fail(?:ed)?)\b/i);
-    if (!m) continue;
-    const w = m[1].toLowerCase();
-    return w.startsWith("pass") ? "pass" : w.startsWith("concern") ? "concerns" : "fail";
+    const at = l.search(/\baudit\b/i);
+    if (at < 0 || /\b(pending|in progress|not (?:yet )?run|todo|tbd)\b/i.test(l)) continue;
+    for (const clause of l.slice(at + 5).split(/[;,]/)) {
+      for (const m of clause.matchAll(/\b(pass(?:ed)?|concerns?|fail(?:ed)?)\b/gi)) {
+        if (/(?:\bno|\bzero|\bwithout|\b0|\bnot)\s+$/i.test(clause.slice(0, m.index))) continue;
+        const w = m[1].toLowerCase();
+        return w.startsWith("pass") ? "pass" : w.startsWith("concern") ? "concerns" : "fail";
+      }
+    }
   }
   return undefined;
 }

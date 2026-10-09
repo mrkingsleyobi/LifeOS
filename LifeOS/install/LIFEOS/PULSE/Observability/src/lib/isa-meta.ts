@@ -20,6 +20,7 @@ export interface IsaMeta {
   verificationCount?: number;
 }
 
+// The caps below mirror hooks/lib/isa-meta.ts (CAPS); change both together.
 const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, max) : undefined);
 const count = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) < 100_000 ? (v as number) : undefined);
 

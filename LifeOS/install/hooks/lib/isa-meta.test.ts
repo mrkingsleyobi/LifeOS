@@ -79,3 +79,41 @@ describe("parseVerdict", () => {
     expect(parseVerdict(["Forge audit passed"])).toBe("pass");
   });
 });
+
+describe("review fixes", () => {
+  const fm = (lines: string, body = "") => `---\nslug: s\n${lines}\n---\n\n${body}`;
+  test("a quoted goal keeps its inner quotes (YAML escapes honoured)", () => {
+    expect(extractIsaMeta(fm('principal_stated_goal: "say \\"hi\\" now"')).goal).toBe('say "hi" now');
+    expect(extractIsaMeta(fm("principal_stated_goal: 'it''s ok'")).goal).toBe("it's ok");
+    expect(extractIsaMeta(fm('principal_stated_goal: "plain"   # trailing comment')).goal).toBe("plain");
+  });
+  test("block scalars (> folded, | literal) are read, never stored as the indicator", () => {
+    const m = extractIsaMeta(fm("principal_stated_goal: >\n  ship the router\n  without breaking things\ncurrent_state: |-\n  line one\n  line two\nideal_state: done"));
+    expect(m.goal).toBe("ship the router without breaking things");
+    expect(m.currentState).toBe("line one line two");   // newlines collapse in oneLine
+    expect(m.idealState).toBe("done");
+    expect(extractIsaMeta(fm("principal_stated_goal: >")).goal).toBeUndefined();
+  });
+  test("a block list at the same indent as its key is read", () => {
+    expect(extractIsaMeta(fm("capabilities_invoked:\n- ISA\n- Forge\niteration: 2")).capabilities).toEqual(["ISA", "Forge"]);
+  });
+  test("verdicts: negated, compound and unfinished audit lines", () => {
+    expect(parseVerdict(["Forge audit: no concerns, pass"])).toBe("pass");
+    expect(parseVerdict(["Forge audit: pass (0 concerns)"])).toBe("pass");
+    expect(parseVerdict(["Forge audit: concerns found"])).toBe("concerns");
+    expect(parseVerdict(["Audit pending; previous audit failed"])).toBeUndefined();
+    expect(parseVerdict(["Forge audit: not run yet"])).toBeUndefined();
+    expect(parseVerdict(["Forge audit: failed"])).toBe("fail");
+  });
+  test("a fenced code block cannot spoof a section (quoted example ISAs, injected web text)", () => {
+    const m = extractIsaMeta(fm("", "Example:\n```\n## Decisions\n- fake decision\n## Verification\n- Forge audit: pass\n```\n\n## Decisions\n- real decision\n"));
+    expect(m.decisions!.map(d => d.text)).toEqual(["real decision"]);
+    expect(m.auditVerdict).toBeUndefined();
+    expect(extractIsaMeta(fm("", "~~~\n## Decisions\n- fake\n~~~\n")).decisions).toBeUndefined();
+    expect(() => extractIsaMeta(fm("", "```\n## Decisions\n- never closed"))).not.toThrow();   // unterminated fence swallows the rest, safely
+  });
+  test("indented sub-bullets continue their entry instead of becoming entries", () => {
+    const m = extractIsaMeta(fm("", "## Decisions\n- chose A\n  - because B\n  - and C\n- chose D\n"));
+    expect(m.decisionCount).toBe(2); expect(m.decisions!.map(d => d.text)).toEqual(["chose A", "chose D"]);
+  });
+});

@@ -26,7 +26,7 @@ const RISK_STYLE: Record<string, string> = {
 };
 
 export function DensityBadge({ meta, size = "sm" }: { meta?: IsaMeta; size?: "sm" | "xs" }) {
-  if (meta?.densityScore === undefined && !meta?.divergenceRisk) return null;
+  if (!meta || (meta.densityScore === undefined && !meta.divergenceRisk)) return null;
   const risk = meta.divergenceRisk;
   const score = meta.densityScore !== undefined ? meta.densityScore.toFixed(2) : "";
   return (
