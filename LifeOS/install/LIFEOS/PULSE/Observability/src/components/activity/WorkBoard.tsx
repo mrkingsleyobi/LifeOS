@@ -6,6 +6,7 @@ import { useAlgorithmState } from "@/hooks/useAlgorithmState";
 import type { AlgorithmState, AlgorithmCriterion, ActivityClass } from "@/types/algorithm";
 import { deriveLifecycle, LIFECYCLE_META, LIFECYCLE_ORDER, formatElapsed, formatAgo, type Lifecycle } from "@/lib/lifecycle";
 import ClimbChart from "./ClimbChart";
+import { IsaMetaBadges, IsaMetaDetail } from "./IsaMeta";
 import QuickPulseStrip from "./QuickPulseStrip";
 import EmptyStateGuide from "@/components/EmptyStateGuide";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -309,6 +310,7 @@ function SessionExpanded({ s, bare = false }: { s: AlgorithmState; bare?: boolea
 // ─── Expanded view for a tracked run ───
 
 function ClimbExpanded({ s, bare = false }: { s: AlgorithmState; bare?: boolean }) {
+  const counts = claimCounts(s);
   const claims = s.criteria.filter((c) => c.type !== "anti-criterion");
   const guards = s.criteria.filter((c) => c.type === "anti-criterion");
   // bare: render as a plain always-open panel (the spotlight). The 0→auto
@@ -334,6 +336,8 @@ function ClimbExpanded({ s, bare = false }: { s: AlgorithmState; bare?: boolean 
             <ClimbChart state={s} variant="full" />
           </div>
         )}
+
+        <IsaMetaDetail meta={s.meta} done={counts.done} total={counts.total} />
 
         {s.intent && !s.criteria.length && (
           <p className="text-sm text-ink-2 leading-relaxed" data-sensitive>{s.intent}</p>
@@ -457,6 +461,7 @@ function BoardRow({
 
         {/* ISA badge — tracked rows announce themselves */}
         <ISABadge s={s} />
+        <IsaMetaBadges meta={s.meta} />
 
         {/* rework badge */}
         {rework && (
@@ -560,6 +565,7 @@ function SessionCard2({
           style={{ backgroundColor: meta.color }}
         />
         <ISABadge s={s} size="xs" />
+        <IsaMetaBadges meta={s.meta} size="xs" />
         <ActivityChip s={s} size="xs" />
         {rework && (
           <span className="text-[10px] font-mono text-amber-400/80 shrink-0">×{s.iteration}</span>

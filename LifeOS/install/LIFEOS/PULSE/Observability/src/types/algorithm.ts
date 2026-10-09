@@ -92,6 +92,8 @@ export interface AlgorithmState {
   /** ISA iteration (1 = first run; 2+ = reopened/rework) */
   iteration?: number;
   reworkCount?: number;
+  /** Badge/strip/panel data from the ISA (goal, density, journey, capabilities, decisions, verification) */
+  meta?: import("@/lib/isa-meta").IsaMeta;
   /** An ISA backs this session — claims, evidence, the climb */
   tracked: boolean;
   /** Ascent history folded from work-events.jsonl */
