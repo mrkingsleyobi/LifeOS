@@ -59,8 +59,8 @@ if (import.meta.main) {
       console.log(claims.add({ person: a1, kind: flags.kind as Claim["kind"], text: flags.text, source: flags.source }).id);
       break;
     case "retract": {
-      const c = a1 && claims.get(a1);
-      if (!c) { console.error("retract <claim-id>"); process.exit(2); }
+      const c = a1 ? claims.get(a1) : undefined;
+      if (!c) { console.error("retract <claim-id>"); process.exit(2); break; }
       console.log(claims.add({ person: c.person, kind: c.kind, text: `(retracts ${c.id})`, retracts: c.id, why: flags.why }).id);
       break;
     }

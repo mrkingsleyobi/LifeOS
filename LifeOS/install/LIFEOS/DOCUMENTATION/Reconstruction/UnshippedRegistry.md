@@ -27,19 +27,25 @@ Status key: **BUILT** = working code here (tested) · **PARTIAL** = runtime here
 | **Bunker** | DOC (`Bunker/BunkerSystem.md`); impl `LIFEOS/PULSE/Bunker/**` private | **BUILT**: `bunker test`, `sync-cloud`, cloud health + security planes | `LIFEOS/BUNKER/Bunker.ts`, `CLOUDFLARE/shared/probes.ts`, `workers/bunker-health` | containment-zones.ts; ISAFormat §12 (`Bunker/src/isa.ts`); #2113 |
 | **Arbol** | DOC; workers private (`LIFEOS/ARBOL/**`) | **BUILT**: Actions/Pipelines/Flows runtime, lane-aware `A_LLM`, `A_JEV` | `CLOUDFLARE/workers/arbol` | ArbolSystem.md; #2112 |
 | **Lockbox** | ABSENT ("designed, NOT built") | **BUILT**: MCP door, 3 scopes, `da.ask`, server-side confirm, tunnel relay | `CLOUDFLARE/workers/lockbox`, `LIFEOS/LOCKBOX/Relay.ts` | CLAUDE.md |
-| **Synapse** | DOC + Pulse module; `LIFEOS/SYNAPSE/ISA.md`, capture endpoint `USER/CUSTOMIZATIONS/ARBOL/summarize/`, `com.lifeos.amberroute` private | DOC (unchanged). Next: Arbol flow for capture → amber ledger. | `DOCUMENTATION/Synapse/` | SynapseSystem.md; BackgroundServices.md; #2245 (`source_amber_id` never written) |
-| **Ledger** (`/vb`) | DOC; tooling in the private `_LIFEOS` skill | DOC | `DOCUMENTATION/Ledger/` | LedgerSystem.md |
-| **Codex front door** | ABSENT (`LIFEOS/CODEX/Mount.ts`) | ABSENT. Next: symlink mirror + hook bridge. | — | CLAUDE.md; #2263 (Cortex across Codex roots) |
-| **Pi front door** | ABSENT (`LIFEOS/PI/Mount.ts`) | ABSENT (`TOOLS/PiSync.sh` exists) | — | CLAUDE.md |
-| **AS3 ISA** | ABSENT (`LIFEOS/AS3/ISA.md`) | ABSENT: per-principal state, write your own | — | CLAUDE.md |
+| **Synapse** | DOC + Pulse module; `LIFEOS/SYNAPSE/ISA.md`, capture endpoint `USER/CUSTOMIZATIONS/ARBOL/summarize/`, `com.lifeos.amberroute` private | **BUILT**: amber CLI (write-ahead journal, privacy gate, Jev/private-lane grading, routing) + `amber-ledger` Worker matching the shipped Pulse `/synapse` contract; promoted notes carry `source_amber_id` | `LIFEOS/SYNAPSE/*`, `CLOUDFLARE/workers/amber-ledger` | SynapseSystem.md; BackgroundServices.md; #2245 (`source_amber_id` never written) |
+| **Ledger** (`/vb`) | DOC; tooling in the private `_LIFEOS` skill | **BUILT**: `_LIFEOS` skill: classify, bump umbrella + component lines, record, index, commit, tag | `skills/_LIFEOS/Tools/VersionBump.ts`, `commands/vb.md` | LedgerSystem.md |
+| **Codex front door** | ABSENT (`LIFEOS/CODEX/Mount.ts`) | **BUILT**: managed AGENTS.md block, skill/prompt symlinks, hooks.json bridge replaying LifeOS hooks | `LIFEOS/CODEX/*`, `TOOLS/lib/HookBridge.ts` | CLAUDE.md; #2263 (Cortex across Codex roots) |
+| **Pi front door** | ABSENT (`LIFEOS/PI/Mount.ts`) | **PARTIAL**: APPEND_SYSTEM.md block, managed skills, generated extension shim. The live Pi event field names are unverified. | `LIFEOS/PI/*` | CLAUDE.md |
+| **AS3 ISA** | ABSENT (`LIFEOS/AS3/ISA.md`) | **BUILT**: root ISA that rolls up every subsystem ISA. Your own TELOS-level outcome claims are left as fog for you to write. | `LIFEOS/AS3/ISA.md` | CLAUDE.md |
 | **Helm / herdr** | ABSENT (kitty layer, `Terminal/kitty/`) | ABSENT (`DOCUMENTATION/Terminal` exists) | — | CLAUDE.md; screen recording |
-| **Session restore** (`/rs`) | ABSENT (`TOOLS/Sessions.ts`) | ABSENT | — | CLAUDE.md |
-| **Pulse Assistant module** | private | ABSENT | — | #1173 |
+| **Session restore** (`/rs`) | ABSENT (`TOOLS/Sessions.ts`) | **BUILT**: Claude/Codex/Pi transcripts → live vs restorable → resume | `TOOLS/Sessions.ts`, `commands/rs.md` | CLAUDE.md |
+| **Pulse Assistant module** | private | ABSENT (the DA chat surface; Lockbox `da.ask` is the backend it would call) | — | #1173 |
 | **Observability (private half)** | loader present, code private | ABSENT | `PULSE/Observability/observability.ts:47` | code comment |
 
 ## 2. Pulse dashboard tabs (2026-09-19 recording)
 
-`Gauntlet · Assistant · Algorithm · Bunker · Arbol · Achilles · Helios · Socrates · Vera · Conduit · OPS · REFERENCE`. Public `PULSE/modules/` ships `algorithm-tab`, `bunker`, `conduit`, `synapse`, `hermes` and others. **Gauntlet, Assistant, Arbol, Achilles, Helios, Socrates, Vera** have no public module. The runtimes above now expose CLIs and JSONL stores a module can read. The modules themselves are the next step.
+`Gauntlet · Assistant · Algorithm · Bunker · Arbol · Achilles · Helios · Socrates · Vera · Conduit · OPS · REFERENCE`. Public `PULSE/modules/` ships `algorithm-tab`, `bunker`, `conduit`, `synapse`, `hermes` and others.
+
+**BUILT here:**
+- **Achilles, Helios, Socrates, Vera, plus Router and Errata**: `PULSE/modules/lifeos-ledgers.ts` + `components/SubsystemView.tsx`. Each tab has its own `[modules]` switch and observer scope.
+- **Bunker** now renders. The shipped module calls `PULSE/Bunker/bin/bunker.ts data`, which is a shim to `BUNKER/Bunker.ts`, and `bunker-health` serves its security `/report` and site-health `/status`.
+
+**Still ABSENT:** **Gauntlet** (purpose unknown from public evidence) and **Assistant** (the DA chat surface).
 
 The Bunker header in the recording, `49 BAYS · 1535/1613 ISA PROBES · 4 FLAGGED · 39/39 UPTIME`, is exactly the `GET /status` shape `bunker-health` returns (`bays`, `probes`, `security.flagged`, `uptime`).
 
@@ -47,15 +53,21 @@ The Bunker header in the recording, `49 BAYS · 1535/1613 ISA PROBES · 4 FLAGGE
 
 | Item | Kind | Evidence |
 |------|------|----------|
-| `ULWorkSync.hook.ts` | SessionEnd hook, GitHub-Issues work sync | HookSystem.md:108,123 |
-| `com.lifeos.amberroute` | launchd, Synapse router every 30m | BackgroundServices.md:63 |
+| `ULWorkSync.hook.ts` | SessionEnd hook, GitHub-Issues work sync | HookSystem.md:108,123. **BUILT** as generic `hooks/WorkSync.hook.ts` (`LIFEOS_WORK_REPO`) |
+| `com.lifeos.amberroute` | launchd, Synapse router every 30m | BackgroundServices.md:63. **BUILT** (`InstallSubsystemJobs.ts --only amberroute`) |
 | `com.lifeos.bookmark-watchdog` | launchd, X bookmark pipeline watchdog | BackgroundServices.md:64 |
 | `com.lifeos.backups` | launchd, daily Git-LFS backup | BackgroundServices.md:65 |
-| `com.lifeos.people` | launchd, hourly People tick | CLAUDE.md. Here: `People.ts tick` |
-| `BumpSkillVersions` | maintainer tool | skills/LifeOS/SKILL.md:66 |
+| `com.lifeos.people` | launchd, hourly People tick | CLAUDE.md. **BUILT** (`InstallSubsystemJobs.ts --only people`), plus socrates, achilles-due/kev, errata-enrich, lockbox-relay, bunker-test |
+| `BumpSkillVersions` | maintainer tool | skills/LifeOS/SKILL.md:66. **BUILT** inside `_LIFEOS/Tools/VersionBump.ts` |
 | `Workflows/TwitterBookmarks.md` | Upgrade skill workflow | skills/Upgrade/SKILL.md:47 |
 | Interceptor "Path B" auto-record | designed, not shipped | Interceptor/Workflows/ScrubFlow.md:30 |
 | Vector tenant sync | company-tenant overlap with TELOS | Telos/Workflows/Update.md:262 |
+
+## 3a. ISAs (upstream excludes every per-subsystem ISA)
+
+Each subsystem now carries an `ISA.md` whose `## Test Strategy` rows are real commands. `bun LIFEOS/BUNKER/Bunker.ts test --isa <path>` runs them, and `LIFEOS/AS3/ISA.md` is the root that runs every child. As of 2026-10-09: **AS3 17/17**. The 15 children total 51/51 deterministic rows, including deep rows against live Jev, CISA KEV and a public URL. Hand-verified `manual` rows (wrangler dev round-trips) are listed as named exceptions.
+
+`ROUTER · DECISIONS · ERRATA · SOCRATES · ACHILLES · VERA · PEOPLE · SYNAPSE · LOCKBOX · BUNKER · CLOUDFLARE (Arbol + Workers) · CODEX · PI · SESSIONS · LEDGER · AS3`
 
 ## 4. Skills
 

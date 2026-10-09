@@ -89,8 +89,8 @@ if (import.meta.main) {
       break;
     case "enrich": await enrich(Number(flags.limit ?? 50), flags.lane ?? "luna"); break;
     case "triage": {
-      const e = a1 && errata.get(a1);
-      if (!e) { console.error("triage <id>"); process.exit(2); }
+      const e = a1 ? errata.get(a1) : undefined;
+      if (!e) { console.error("triage <id>"); process.exit(2); break; }
       const u = addUpgrade({ claim: flags.claim ?? `${e.system ?? "System"}: ${e.theme ?? e.verbatim.slice(0, 120)}`, source: "correction", current_state: e.verbatim, session_id: e.session, evidence: [e.id] });
       errata.update(e.id, { status: "triaged", upgrade: u.id });
       console.log(`${e.id} → upgrade ${u.id}${u.created ? "" : ` (${u.reason})`}`);

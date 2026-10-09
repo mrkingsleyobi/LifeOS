@@ -80,7 +80,7 @@ if (import.meta.main) {
       process.exit(h.ok ? 0 : 1);
     } else if (cmd === "run") {
       let prompt = (await new Response(Bun.stdin.stream()).text()).trim();
-      const files = process.argv.flatMap((a, i) => (a === "--file" ? [process.argv[i + 1]] : []));
+      const files = process.argv.flatMap((a: string, i: number) => (a === "--file" ? [process.argv[i + 1]] : []));
       for (const f of files) prompt += `\n\n--- FILE: ${f} ---\n${readFileSync(f, "utf-8")}`;
       if (!prompt) { console.error("prompt on stdin (or --file) required"); process.exit(2); }
       const answer = await complete(prompt, { system: flag("--system"), maxTokens: Number(flag("--max-tokens") ?? 2048) });

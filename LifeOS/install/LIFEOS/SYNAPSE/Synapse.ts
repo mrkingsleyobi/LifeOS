@@ -230,7 +230,7 @@ if (import.meta.main) {
     }
     case "telos-push": {
       const c = cloud();
-      if (!c) { console.error("cloud ledger not configured"); process.exit(2); }
+      if (!c) { console.error("cloud ledger not configured"); process.exit(2); break; }
       const r = await fetch(`${c.base}/telos`, { method: "PUT", headers: { authorization: `Bearer ${c.token}` }, body: telosSummary() });
       console.log(r.ok ? "TELOS summary published" : `failed ${r.status}`);
       break;

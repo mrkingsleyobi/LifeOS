@@ -47,7 +47,7 @@ function claudeSessions(since: number): Session[] {
   for (const proj of existsSync(root) ? readdirSync(root) : []) {
     const dir = join(root, proj);
     let files: string[] = [];
-    try { files = readdirSync(dir).filter((f) => f.endsWith(".jsonl")); } catch { continue; }
+    try { files = (readdirSync(dir) as string[]).filter((f: string) => f.endsWith(".jsonl")); } catch { continue; }
     for (const f of files) {
       const p = join(dir, f), st = statSync(p);
       if (st.mtimeMs < since) continue;
@@ -106,7 +106,7 @@ function runningCwds(): Record<Harness, Set<string>> {
   const res: Record<Harness, Set<string>> = { claude: new Set(), codex: new Set(), pi: new Set() };
   const classify = (cmd: string): Harness | null => /(^|\/)claude(\s|$)/.test(cmd) ? "claude" : /(^|\/)codex(\s|$)/.test(cmd) ? "codex" : /(^|\/)pi(\s|$)/.test(cmd) ? "pi" : null;
   if (existsSync("/proc/self/cwd")) {
-    for (const pid of readdirSync("/proc").filter((d) => /^\d+$/.test(d))) {
+    for (const pid of (readdirSync("/proc") as string[]).filter((d: string) => /^\d+$/.test(d))) {
       try {
         const cmd = readFileSync(`/proc/${pid}/cmdline`, "utf-8").split("\0").slice(0, 2).join(" ");
         const h = classify(cmd) ?? (cmd.includes("@anthropic-ai/claude-code") ? "claude" : null);
@@ -119,8 +119,8 @@ function runningCwds(): Record<Harness, Set<string>> {
       const m = line.trim().match(/^(\d+)\s+(.*)$/);
       const h = m && classify(m[2]);
       if (!m || !h) continue;
-      const cwd = (spawnSync("lsof", ["-a", "-p", m[1], "-d", "cwd", "-Fn"], { encoding: "utf-8" }).stdout ?? "").split("\n").find((l) => l.startsWith("n"))?.slice(1);
-      if (cwd) res[h].add(cwd);
+      const cwd = (spawnSync("lsof", ["-a", "-p", m[1], "-d", "cwd", "-Fn"], { encoding: "utf-8" }).stdout ?? "").split("\n").find((l: string) => l.startsWith("n"))?.slice(1);
+      if (cwd) res[h as Harness].add(cwd);
     }
   }
   return res;
@@ -169,7 +169,7 @@ if (import.meta.main) {
     }
     case "restore": {
       const s = argv[1] ? pick(argv[1]) : undefined;
-      if (!s) { console.error("restore <n|id-prefix> — run `list` for numbers"); process.exit(2); }
+      if (!s) { console.error("restore <n|id-prefix> — run `list` for numbers"); process.exit(2); break; }
       const a = resumeArgv(s);
       if (argv.includes("--print")) { console.log(`cd ${shq(s.cwd)} && ${a.map(shq).join(" ")}`); break; }
       const r = spawnSync(a[0], a.slice(1), { cwd: s.cwd || undefined, stdio: "inherit" });

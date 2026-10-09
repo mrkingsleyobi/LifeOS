@@ -19,7 +19,7 @@
 
 import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { dirname, join } from "path";
+import { dirname, join, resolve } from "path";
 import { homedir } from "os";
 import { args, lifeosDir } from "../TOOLS/lib/Ledger";
 import { parseTestStrategy, compileCurl, runProbe, type Probe } from "../CLOUDFLARE/shared/probes";
@@ -48,7 +48,7 @@ export async function runIsa(isaPath: string, quiet = false): Promise<ProbeRow[]
       if (p) { const res = await runProbe(p); ok = res.ok; detail = res.detail ?? `${res.status} ${res.ms}ms`; } else detail = "uncompilable curl row";
     } else {
       const cmd = r.type.startsWith("bun-") && !/^bun\b/.test(r.tool) ? `bun test ${r.tool}` : r.tool;
-      const sh = spawnSync("bash", ["-c", cmd], { encoding: "utf-8", timeout: r.tier === "deep" ? 600_000 : 60_000, cwd: dirname(isaPath) });
+      const sh = spawnSync("bash", ["-c", cmd], { encoding: "utf-8", timeout: r.tier === "deep" ? 600_000 : 60_000, cwd: dirname(resolve(isaPath)) });
       ok = sh.status === 0;
       detail = ok ? "exit 0" : `exit ${sh.status}: ${(sh.stderr || sh.stdout || "").trim().split("\n").at(-1)?.slice(0, 120)}`;
     }
@@ -59,30 +59,15 @@ export async function runIsa(isaPath: string, quiet = false): Promise<ProbeRow[]
 }
 
 async function test(isaPath: string): Promise<boolean> {
+  // One executor for the CLI, `bunker data` and the cloud compiler: rows run from the ISA's own directory.
   const rows = parseTestStrategy(readFileSync(isaPath, "utf-8"));
   if (!rows.length) { console.log(`${isaPath}: no ## Test Strategy rows`); return false; }
-  let pass = 0, fail = 0, critical = false;
-  const exceptions: string[] = [];
-  for (const r of rows) {
-    if (r.type === "eval") { exceptions.push(`${r.isc} eval → Skill("Evals") EvalRunner`); continue; }
-    if (r.type === "manual") { exceptions.push(`${r.isc} manual → principal attests`); continue; }
-    let ok = false, detail = "";
-    if (r.type === "curl") {
-      const p = compileCurl(r);
-      if (p) { const res = await runProbe(p); ok = res.ok; detail = res.detail ?? `${res.status} ${res.ms}ms`; }
-      else { detail = "uncompilable curl row"; }
-    } else if (["bash", "bun-test", "bun-property", "screenshot"].includes(r.type)) {
-      const cmd = r.type.startsWith("bun-") && !/^bun\b/.test(r.tool) ? `bun test ${r.tool}` : r.tool;
-      const sh = spawnSync("bash", ["-c", cmd], { encoding: "utf-8", timeout: r.tier === "deep" ? 600_000 : 60_000 });
-      ok = sh.status === 0;
-      detail = ok ? "exit 0" : `exit ${sh.status}: ${(sh.stderr || sh.stdout || "").trim().split("\n").at(-1)?.slice(0, 120)}`;
-    } else { exceptions.push(`${r.isc} unknown type ${r.type}`); continue; }
-    ok ? pass++ : fail++;
-    if (!ok && r.severity === "critical") critical = true;
-    console.log(`${ok ? "✓" : "✗"} ${r.isc.padEnd(8)} ${r.type.padEnd(8)} ${r.check.slice(0, 60)}${ok ? "" : `  — ${detail}`}`);
-  }
-  for (const e of exceptions) console.log(`· ${e}`);
-  console.log(`${pass}/${pass + fail} deterministic probes · ${exceptions.length} exception(s)${critical ? " · CRITICAL FAILING → app DOWN" : ""}`);
+  const results = await runIsa(isaPath);
+  const pass = results.filter((r) => r.status === "pass").length;
+  const fail = results.filter((r) => r.status === "fail").length;
+  for (const r of results.filter((x) => x.status === "skip")) console.log(`· ${r.isc} ${r.detail}`);
+  const critical = results.some((r) => r.status === "fail" && rows.find((x) => x.isc === r.isc)?.severity === "critical");
+  console.log(`${pass}/${pass + fail} deterministic probes · ${results.length - pass - fail} exception(s)${critical ? " · CRITICAL FAILING → app DOWN" : ""}`);
   return fail === 0;
 }
 
