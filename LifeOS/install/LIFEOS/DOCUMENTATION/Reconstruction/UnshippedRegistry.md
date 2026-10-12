@@ -34,7 +34,7 @@ Status key: **BUILT** = working code here (tested) · **PARTIAL** = runtime here
 | **AS3 ISA** | ABSENT (`LIFEOS/AS3/ISA.md`) | **BUILT**: root ISA that rolls up every subsystem ISA. Your own TELOS-level outcome claims are left as fog for you to write. | `LIFEOS/AS3/ISA.md` | CLAUDE.md |
 | **Helm / herdr** | ABSENT (kitty layer, `Terminal/kitty/`) | ABSENT (`DOCUMENTATION/Terminal` exists) | — | CLAUDE.md; screen recording |
 | **Session restore** (`/rs`) | ABSENT (`TOOLS/Sessions.ts`) | **BUILT**: Claude/Codex/Pi transcripts → live vs restorable → resume | `TOOLS/Sessions.ts`, `commands/rs.md` | CLAUDE.md |
-| **Pulse Assistant module** | private | ABSENT (the DA chat surface; Lockbox `da.ask` is the backend it would call) | — | #1173 |
+| **Pulse Assistant module** | private (#1419/#1173) | **BUILT**: `PULSE/Assistant/module.ts` to the contract pulse.ts already wires; fail-soft identity/personality/health/tasks/diary/opinions/cron + a Chat tab (`/assistant/ask` → Lockbox relay → `claude -p`, Router-routed) | `LIFEOS/PULSE/Assistant/module.ts` | #1173 |
 | **Observability (private half)** | loader present, code private | ABSENT | `PULSE/Observability/observability.ts:47` | code comment |
 
 ## 2. Pulse dashboard tabs (2026-09-19 recording)
@@ -45,7 +45,7 @@ Status key: **BUILT** = working code here (tested) · **PARTIAL** = runtime here
 - **Achilles, Helios, Socrates, Vera, plus Router and Errata**: `PULSE/modules/lifeos-ledgers.ts` + `components/SubsystemView.tsx`. Each tab has its own `[modules]` switch and observer scope.
 - **Bunker** now renders. The shipped module calls `PULSE/Bunker/bin/bunker.ts data`, which is a shim to `BUNKER/Bunker.ts`, and `bunker-health` serves its security `/report` and site-health `/status`.
 
-**Still ABSENT:** **Gauntlet** (purpose unknown from public evidence) and **Assistant** (the DA chat surface).
+**Still ABSENT:** **Gauntlet**. Investigated 2026-10-12 (#13): no public definition exists anywhere — zero hits in upstream code or issue search (GitHub MCP), nothing in the docs tree, and no blog/PAI writeup. It appears only as a Pulse nav tab and a skill name in the 2026-09-19 recording. Most-likely reading from its neighbours (Achilles=vulns, Helios=offensive, Evals skill): a battery/challenge-run surface that runs a suite of adversarial checks against a target and shows pass/fail. Not built — building a guessed subsystem is speculative scope; it needs the principal's own definition first. (**Assistant** is now BUILT — see § 1.)
 
 The Bunker header in the recording, `49 BAYS · 1535/1613 ISA PROBES · 4 FLAGGED · 39/39 UPTIME`, is exactly the `GET /status` shape `bunker-health` returns (`bays`, `probes`, `security.flagged`, `uptime`).
 
