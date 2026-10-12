@@ -234,7 +234,8 @@ function TraitBar({ name, value, color, onEdit }: { name: string; value: number;
 
 export default function AssistantPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"tasks" | "personality" | "hermes" | "diary">("tasks");
+  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "personality" | "hermes" | "diary">("chat");
+  const [chatInput, setChatInput] = useState("");
   // Which scheduler the Scheduled Tasks tab is showing. Pulse cron is the default
   // because it is the one Pulse actually owns and the one that gets edited.
   const [scheduleTab, setScheduleTab] = useState<"pulse" | "launchd" | "claude-code" | "arbol" | "hermes">("pulse");
@@ -245,6 +246,7 @@ export default function AssistantPage() {
   const { data: tasksData } = useQuery<TasksResponse>({ queryKey: ["assistant-tasks"], queryFn: () => localApiCall("/assistant/tasks"), refetchInterval: 15_000 });
   const { data: diaryData } = useQuery<{ entries: DiaryEntry[] }>({ queryKey: ["assistant-diary"], queryFn: () => localApiCall("/assistant/diary"), refetchInterval: 60_000 });
   const { data: opinionsData } = useQuery<{ raw: string }>({ queryKey: ["assistant-opinions"], queryFn: () => localApiCall("/assistant/opinions"), refetchInterval: 60_000 });
+  const { data: historyData } = useQuery<{ turns: { ts: string; question: string; answer: string; via: string }[] }>({ queryKey: ["assistant-history"], queryFn: () => localApiCall("/assistant/history"), refetchInterval: 5_000 });
 
   // Cron CRUD — full source-of-truth list (system + user merged), plus
   // patch/delete/post mutations. Refresh via "assistant-cron" key.
@@ -267,6 +269,12 @@ export default function AssistantPage() {
     mutationFn: (name: string) =>
       localApiCall(`/assistant/cron/${encodeURIComponent(name)}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assistant-cron"] }),
+  });
+
+  const askDA = useMutation({
+    mutationFn: (question: string) =>
+      localApiCall("/assistant/ask", { method: "POST", body: JSON.stringify({ question }) }),
+    onSuccess: () => { setChatInput(""); queryClient.invalidateQueries({ queryKey: ["assistant-history"] }); },
   });
 
   const [showAddCron, setShowAddCron] = useState(false);
@@ -356,6 +364,7 @@ export default function AssistantPage() {
   ];
 
   const tabs: TabSpec<typeof activeTab>[] = [
+    { id: "chat", label: "Chat", dim: "relationships" },
     { id: "tasks", label: "Scheduled Tasks", dim: "creative" },
     { id: "personality", label: "Personality", dim: "relationships" },
     { id: "hermes", label: "Hermes", dim: "freedom" },
@@ -401,6 +410,50 @@ export default function AssistantPage() {
 
         {/* Tab Bar */}
         <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} className="pb-3" />
+
+        {/* CHAT TAB — ask the DA; routed through the Lockbox relay (Router/Jev hook fires) */}
+        {activeTab === "chat" && (
+          <Section title="Ask the Assistant" icon={MessageSquare} dimension="relationships">
+            <form
+              onSubmit={(e) => { e.preventDefault(); const q = chatInput.trim(); if (q) askDA.mutate(q); }}
+              className="flex gap-2 mb-4"
+            >
+              <input
+                className="flex-1 rounded-md bg-ink-9/40 border border-ink-7 px-3 py-2 text-sm"
+                placeholder="Ask your DA… (answered on your machine via the Lockbox relay)"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                disabled={askDA.isPending}
+              />
+              <button
+                type="submit"
+                className="rounded-md px-4 py-2 text-sm font-medium"
+                style={{ background: "var(--relationships)", color: "#0b0f14" }}
+                disabled={askDA.isPending || !chatInput.trim()}
+              >
+                {askDA.isPending ? "Thinking…" : "Ask"}
+              </button>
+            </form>
+            <div className="space-y-4">
+              {(historyData?.turns ?? []).length === 0 && (
+                <p className="text-sm text-ink-3">
+                  No conversation yet. Answers run on your machine: start the relay with
+                  <span className="mono"> bun ~/.claude/LIFEOS/LOCKBOX/Relay.ts serve</span>.
+                </p>
+              )}
+              {(historyData?.turns ?? []).map((t) => (
+                <div key={t.ts} className="rounded-md border border-ink-8 p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-ink-1">{t.question}</span>
+                    {t.via === "unavailable" && <Pill dim="warn">relay down</Pill>}
+                  </div>
+                  <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-ink-2">{t.answer}</p>
+                  <div className="mt-1 text-[11px] text-ink-3">{new Date(t.ts).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
 
         {/* SCHEDULED TASKS TAB — one sub-tab per scheduler */}
         {activeTab === "tasks" && (
