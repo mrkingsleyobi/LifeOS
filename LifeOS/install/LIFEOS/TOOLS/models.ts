@@ -68,10 +68,10 @@ export function pinnedModelForEffort(level: EffortLevel): string {
  * rewrites these safely.
  */
 export const CURRENT: Record<ClaudeTier, string> = {
-  fable: "claude-fable-5",
-  opus: "claude-opus-5",
-  sonnet: "claude-sonnet-5",
-  haiku: "claude-haiku-4-5-20251001",
+  fable: "claude-fable-5-1",
+  opus: "claude-opus-5-5",
+  sonnet: "claude-sonnet-5-5",
+  haiku: "claude-haiku-5-5",
 };
 
 /** Pinned ID for a Claude tier. */
@@ -86,15 +86,41 @@ export function currentModel(tier: ClaudeTier): string {
  * non-Claude pin from a stale Claude one.
  */
 export const CROSS_VENDOR: Record<string, string> = {
-  forge: "gpt-5.6-sol",                // OpenAI (Tier-2 egress); build + audit modes
+  // ── OpenAI tier ladder (Router lanes; Tier-2 egress, RESTRICTED-capable). Max → High → Medium → Low.
+  astra: "gpt-6-astra",                // MAX    — exhaustive coverage, needle-in-haystack, frontier ceiling ($10/$50)
+  sol: "gpt-6.1-sol",                  // HIGH   — settled builds with a pass/fail test writable in advance ($2/$10)
+  terra: "gpt-5.6-terra",              // MEDIUM — decided approach, small local choices; bulk docs (SDS/JD) ($2/$12)
+  luna: "gpt-6-luna",                  // LOW    — very basic, high-volume token work ($0.10/$0.50)
+  forge: "gpt-6.1-sol",                // OpenAI (Tier-2 egress); build + audit modes — rides the SOL rung
   helios: "gpt-5.6-cyber",             // OpenAI Trusted Access Program (blue+red cyber model; Tier-2 egress) — the offensive-security agent's finder; access tested + principal-approved. Lights the statusline CYBER lane (*cyber* match)
-  codexResearcher: "gpt-5.6-sol",      // OpenAI (Tier-2 egress)
-  codexResearcherFast: "gpt-5.6-luna", // OpenAI (Tier-2 egress); breadth-first sweep rung
-  geminiResearcher: "gemini-3.6-flash",// Google (Tier-2 egress; PUBLIC ceiling) — research lane only
-  gemini: "gemini-3.1-pro-preview",    // Google (Tier-2 egress; PUBLIC ceiling) — general Gemini agent; top reasoning model per ai.google.dev + our key's ListModels 2026-08-12 (Pro line still preview; bump when a GA pro lands)
-  gene: "z-ai/glm-5.2",                // OpenRouter broker (Tier-2); US+ZDR pin => INTERNAL, unpinned => PUBLIC
-  grok: "grok-4.6",                    // xAI (Tier-2 egress; PUBLIC ceiling — HARD: context-recording incident; principal-approved 2026-08-12, non-sensitive tasks only, never reasoning/audit lanes)
+  codexResearcher: "gpt-6.1-sol",      // OpenAI (Tier-2 egress)
+  codexResearcherFast: "gpt-6-luna",   // OpenAI (Tier-2 egress); breadth-first sweep rung
+  geminiResearcher: "gemini-3.8-flash",// Google (Tier-2 egress; PUBLIC ceiling) — research lane only
+  gemini: "gemini-4-argon",            // Google (Tier-2 egress; PUBLIC ceiling) — general Gemini agent; S+ on the 2026-10 tier list
+  gene: "z-ai/glm-5.3",                // OpenRouter broker (Tier-2); US+ZDR pin => INTERNAL, unpinned => PUBLIC
+  grok: "grok-4.7",                    // xAI (Tier-2 egress; PUBLIC ceiling — HARD: context-recording incident; principal-approved 2026-08-12, non-sensitive tasks only, never reasoning/audit lanes)
 };
+
+/** OpenAI rung → CROSS_VENDOR key. The Router's OpenAI ladder; edit CROSS_VENDOR, not this. */
+export const OPENAI_TIER: Record<EffortLevel, "astra" | "sol" | "terra" | "luna"> = {
+  max: "astra",
+  high: "sol",
+  medium: "terra",
+  low: "luna",
+};
+
+/**
+ * PRIVATE PINNED LANE — sensitive data never leaves the box. A llama.cpp server
+ * (`llama-server`, OpenAI-compatible /v1/chat/completions) on loopback. NOT
+ * LocalIntelligence: that skill is about on-device capability; this lane is a
+ * data-boundary guarantee the Router enforces. Endpoint/model override via
+ * LIFEOS_PRIVATE_LANE_URL / LIFEOS_PRIVATE_LANE_MODEL.
+ */
+export const PRIVATE_LANE = {
+  url: "http://127.0.0.1:8080",
+  model: "qwen3.8-27b",
+  fallbacks: ["qwen3.6-27b", "gemma-4-31b"],
+} as const;
 
 /**
  * Dated/pinned Claude-ID pattern — matches claude-{tier}-{major}[-{minor}][-date], covering

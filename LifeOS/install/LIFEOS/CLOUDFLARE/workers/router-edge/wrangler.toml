@@ -1,0 +1,17 @@
+# router-edge — the Router for non-laptop front doors (see src/index.ts)
+name = "lifeos-router-edge"
+main = "src/index.ts"
+compatibility_date = "2026-09-15"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lifeos-router"
+database_id = "REPLACE_WITH_D1_ID"   # wrangler d1 create lifeos-router && wrangler d1 execute lifeos-router --file workers/router-edge/schema.sql --remote
+
+[[kv_namespaces]]
+binding = "ROUTER_KV"
+id = "REPLACE_WITH_KV_ID"
+
+# Secrets: ROUTER_TOKEN, OPENROUTER_API_KEY (and/or TYPESAFE_API_KEY)
+# Optional Cloudflare Access: [vars] ACCESS_TEAM = "<team>.cloudflareaccess.com", ACCESS_AUD = "<aud tag>"

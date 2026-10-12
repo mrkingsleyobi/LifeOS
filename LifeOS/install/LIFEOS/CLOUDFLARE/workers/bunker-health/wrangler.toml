@@ -1,0 +1,16 @@
+# bunker-health — Bunker observability + security planes (see src/index.ts)
+name = "lifeos-bunker-health"
+main = "src/index.ts"
+compatibility_date = "2026-09-15"
+workers_dev = true
+
+[triggers]
+crons = ["*/5 * * * *"]   # fast probes every 5 min; deep + security at the top of the hour
+
+[[kv_namespaces]]
+binding = "BUNKER"
+id = "REPLACE_WITH_KV_ID"   # wrangler kv namespace create BUNKER
+
+# Secrets (never in this file):
+#   wrangler secret put MANIFEST_TOKEN -c workers/bunker-health/wrangler.toml
+#   wrangler secret put ALERT_WEBHOOK  -c workers/bunker-health/wrangler.toml   # optional

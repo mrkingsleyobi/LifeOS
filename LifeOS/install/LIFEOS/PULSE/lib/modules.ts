@@ -25,7 +25,9 @@ export const MODULE_DEFAULTS: Record<string, boolean> = {
   ledger: true, upgrades: true, hypotheses: true, usage: true,
   performance: true, bunker: true, algorithm: true, evals: true,
   threatmodel: true, hermes: true, docs: true, voice: true,
-  imessage: false, syslog: false, da: false,
+  imessage: false, syslog: false, da: true,
+  // Rebuilt subsystems (modules/lifeos-ledgers.ts) — one module, one tab each.
+  router: true, achilles: true, helios: true, socrates: true, vera: true, errata: true,
 }
 
 // Legacy `[section].enabled` flags that predate the `[modules]` table, mapped to

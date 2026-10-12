@@ -1,0 +1,19 @@
+# Arbol — Actions → Pipelines → Flows on Cloudflare Workers (see src/index.ts)
+name = "lifeos-arbol"
+main = "src/index.ts"
+compatibility_date = "2026-09-15"
+workers_dev = true
+
+[triggers]
+crons = ["* * * * *"]   # every minute; each flow's own cron (src/flows.ts) decides whether it runs
+
+[[kv_namespaces]]
+binding = "ARBOL"
+id = "REPLACE_WITH_KV_ID"   # wrangler kv namespace create ARBOL
+
+# Secrets:
+#   wrangler secret put ARBOL_TOKEN         -c workers/arbol/wrangler.toml
+#   wrangler secret put OPENROUTER_API_KEY  -c workers/arbol/wrangler.toml   # Jev
+#   wrangler secret put OPENAI_API_KEY      -c workers/arbol/wrangler.toml   # Luna/Terra/Sol/Astra lanes
+#   wrangler secret put ANTHROPIC_API_KEY   -c workers/arbol/wrangler.toml   # Haiku/Sonnet/Opus/Fable lanes
+#   wrangler secret put BRIEF_WEBHOOK       -c workers/arbol/wrangler.toml   # optional

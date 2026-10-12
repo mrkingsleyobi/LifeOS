@@ -1,0 +1,26 @@
+# Lockbox — the one MCP door into LifeOS (see src/index.ts)
+name = "lifeos-lockbox"
+main = "src/index.ts"
+compatibility_date = "2026-09-15"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "LOCKBOX"
+id = "REPLACE_WITH_KV_ID"
+
+[[services]]
+binding = "BUNKER"
+service = "lifeos-bunker-health"
+
+[[services]]
+binding = "ROUTER"
+service = "lifeos-router-edge"
+
+# [vars]
+# PRINCIPAL_EMAIL = "you@example.com"
+# ACCESS_TEAM     = "<team>.cloudflareaccess.com"
+# ACCESS_AUD      = "<Access application AUD tag>"
+# RELAY_URL       = "https://relay.<your-domain>"     # Cloudflare Tunnel → 127.0.0.1:31338 (LIFEOS/LOCKBOX/Relay.ts)
+#
+# Secrets: CLIENTS (JSON token→{client,scopes}), RELAY_SECRET, RELAY_ACCESS_ID, RELAY_ACCESS_SECRET,
+#          CONFIRM_WEBHOOK (ntfy/Pushover URL that reaches the principal's phone), ROUTER_TOKEN

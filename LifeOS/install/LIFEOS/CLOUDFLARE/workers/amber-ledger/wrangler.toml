@@ -1,0 +1,21 @@
+# amber-ledger — Synapse's journal (write-ahead, dedup, grade vs TELOS, route).
+# The name MUST contain "amber-ledger": the Pulse synapse module discovers it by name.
+name = "lifeos-amber-ledger"
+main = "src/index.ts"
+compatibility_date = "2026-09-15"
+workers_dev = true
+
+[triggers]
+crons = ["*/10 * * * *"]   # grade + route captured rows off the capture path
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lifeos-amber"
+database_id = "REPLACE_WITH_D1_ID"   # wrangler d1 create lifeos-amber && wrangler d1 execute lifeos-amber --remote --file workers/amber-ledger/schema.sql
+
+[[kv_namespaces]]
+binding = "AMBER_KV"                 # telos:summary (pushed by `bun SYNAPSE/Synapse.ts telos-push`)
+id = "REPLACE_WITH_KV_ID"
+
+# Secrets: AMBER_TOKEN (same value as ~/.config/arbol/config.yaml auth_token, which Pulse uses),
+#          OPENROUTER_API_KEY (Jev grading), [TYPESAFE_API_KEY]

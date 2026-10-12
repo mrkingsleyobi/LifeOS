@@ -1,0 +1,91 @@
+[
+  {
+    "title": "Tracking: finish the Router/Jev rebuild and the reconstructed subsystems",
+    "tracking": true,
+    "body": "Everything still open after mrkingsleyobi/LifeOS#7. Sources: `LIFEOS/DOCUMENTATION/Reconstruction/UnshippedRegistry.md` (rows still PARTIAL or ABSENT, plus § Limits), the `## Remaining Work` and manual rows in each `LIFEOS/<SUBSYSTEM>/ISA.md`, and caveats found while building.\n\nAlready passing: `bun LIFEOS/BUNKER/Bunker.ts test --isa LIFEOS/AS3/ISA.md` gives 17/17. Every sub-issue is work that needs your accounts, machines or decisions, or is new build work."
+  },
+  {
+    "title": "Confirm the OpenAI model IDs for Astra, Sol, Terra and Luna",
+    "body": "`CROSS_VENDOR` in `LIFEOS/TOOLS/models.ts` uses `gpt-6-astra`, `gpt-6.1-sol`, `gpt-5.6-terra` and `gpt-6-luna`. These come from the display names on the 2026-10 tier list, not from your account. `helios: gpt-5.6-cyber`, `gemini: gemini-4-argon` and `grok: grok-4.7` are unconfirmed for the same reason.\n\n**Done when**\n- [ ] Each ID matches your OpenAI, Google and xAI account model lists (for codex, `codex exec --model <id> \"ping\"` succeeds)\n- [ ] `models.ts` is fixed. It's the only edit point.\n- [ ] `bun LIFEOS/ROUTER/Router.ts audit` passes"
+  },
+  {
+    "title": "Fix the TypeSafe API key (Jev returns 401 on the direct transport)",
+    "body": "`api.typesafe.ai` rejected `TYPESAFE_API_KEY` with a 401 during the build. Jev failed over to OpenRouter, which works, and benched TypeSafe for an hour after every 401. The direct transport has lower latency.\n\n**Done when**\n- [ ] There's a valid key in `~/.claude/.env`, from console.typesafe.ai\n- [ ] `rm ~/.cache/lifeos-statusline/jev-benched-*` has been run, then `LIFEOS_JEV_TRANSPORT=typesafe bun LIFEOS/DECISIONS/Jev.ts noul \"test\" \"Is this a test?\"` returns a probability"
+  },
+  {
+    "title": "Stand up the Private Pinned Lane (llama.cpp + Qwen3.8-27B on loopback)",
+    "body": "The Router pins sensitive prompts to the `private` lane, but there's no local model running yet. `PrivateLane.ts health` fails, so private-lane work currently stops by design instead of falling back to the cloud.\n\n**Done when**\n- [ ] `llama-server -m <Qwen3.8-27B GGUF> --host 127.0.0.1 --port 8080 -c 32768 --jinja` runs, ideally as a launchd/systemd job\n- [ ] `bun LIFEOS/ROUTER/PrivateLane.ts health` returns `ok: true`\n- [ ] `echo 'summarize: test' | bun LIFEOS/ROUTER/Router.ts run private` answers locally\n- [ ] Socrates and Synapse personal grading succeed through the lane"
+  },
+  {
+    "title": "Deploy the Cloudflare Workers (bunker-health, arbol, router-edge, errata-intake, lockbox, amber-ledger)",
+    "body": "All six Workers typecheck, bundle, and were exercised under `wrangler dev`. None are deployed yet. Follow `LIFEOS/CLOUDFLARE/README.md`.\n\n**Done when**\n- [ ] The KV namespaces and D1 databases exist, their IDs are in each `wrangler.toml`, and the D1 schemas are applied\n- [ ] Secrets are set: MANIFEST_TOKEN, ARBOL_TOKEN, ROUTER_TOKEN, APP_KEYS, DRAIN_TOKEN, CLIENTS, RELAY_SECRET, AMBER_TOKEN, and the API keys\n- [ ] They're deployed in this order: bunker, router, errata, amber, arbol, lockbox\n- [ ] `~/.config/arbol/config.yaml` has `subdomain`, `auth_token`, `security_worker` and `site_health_worker` (both `lifeos-bunker-health`), so the Pulse Bunker and Synapse tabs light up\n- [ ] `.env` has LIFEOS_BUNKER_URL/TOKEN, LIFEOS_ERRATA_INTAKE_URL/TOKEN, AMBER_LEDGER_URL and AMBER_TOKEN"
+  },
+  {
+    "title": "Lockbox remote reach: Cloudflare Tunnel + Access, then verify scopes live",
+    "body": "Lockbox ISC-2 is a manual row. Scope filtering, the `da.ask` queue and act-confirm were checked under `wrangler dev`, but never end to end with the tunnel.\n\n**Done when**\n- [ ] `cloudflared` tunnel routes `relay.<domain>` to `127.0.0.1:31338`, behind an Access service token\n- [ ] The `lockbox-relay` job is installed (`InstallSubsystemJobs.ts --only lockbox-relay`)\n- [ ] A read/ask client doesn't see the `act.*` tools; `da.ask` answers through the relay; `act.request` sends a code to your phone and only `act.confirm` with that code runs the action\n- [ ] `LIFEOS/LOCKBOX/ISA.md` ISC-2 is flipped to checked"
+  },
+  {
+    "title": "Install the scheduled jobs on a real machine",
+    "body": "`LIFEOS/TOOLS/InstallSubsystemJobs.ts` generates launchd plists (validated with plistlib) and systemd units, but they've never been loaded on a real account.\n\n**Done when**\n- [ ] Installed: people, socrates, achilles-due, achilles-kev, errata-enrich, amberroute, bunker-test (and lockbox-relay, see the Lockbox issue)\n- [ ] `bun LIFEOS/TOOLS/Services.ts status` shows them running\n- [ ] Each `MEMORY/STATE/com.lifeos.<job>.log` shows one clean run"
+  },
+  {
+    "title": "Mount the Codex front door and approve its hooks",
+    "body": "`bun LIFEOS/CODEX/Mount.ts` was tested in a sandbox `CODEX_HOME`, not your real one.\n\n**Done when**\n- [ ] Mounted on your machine, and the hooks are approved in Codex if it lists them as untrusted\n- [ ] A Codex prompt shows the `🧭 ROUTER` line, and `rm -rf /` in a Codex shell call is blocked by the bridge\n- [ ] `CrossVendorAudit.ts` still runs with its isolated CODEX_HOME (no LifeOS persona in audit output)"
+  },
+  {
+    "title": "Pi front door: verify the extension event fields on your installed Pi",
+    "body": "The generated shim (`~/.pi/agent/extensions/lifeos-bridge.ts`) reads `event.systemPrompt`, `event.prompt`, `event.input` and `event.toolName` defensively, because Pi's docs don't pin those payload fields down. This is PI ISA ISC-3 (manual) plus its Remaining Work.\n\n**Done when**\n- [ ] `bun LIFEOS/PI/Mount.ts` runs on your machine and Pi loads the extension\n- [ ] The Router line reaches the run's context, and a blocked tool call shows the LifeOS reason\n- [ ] Field names are corrected in `PI/Mount.ts` `shimSource()` if they differ, and PI ISC-3 is checked"
+  },
+  {
+    "title": "Verify the status line on a real terminal",
+    "body": "The new model and agent rows, the `🧭 ROUTER` line, and the OpenAI `WK … PRO` bar were rendered only in a sandboxed HOME, with a synthetic codex rollout and usage cache.\n\n**Done when**\n- [ ] In a real session, after a few routed prompts, the rows light up: routed is underlined, live is bold, used is plain\n- [ ] The OpenAI WK percentage and plan match `codex /status`\n- [ ] FB shows real data, or `n/a` when your account has no scoped Fable week\n- [ ] A tick stays fast: the OpenAI quota refresh runs in the background"
+  },
+  {
+    "title": "Register your apps with Bunker and sync to the cloud",
+    "body": "Bunker runs ISAs, but `USER/CONFIG/bunker.json` is empty on a fresh install.\n\n**Done when**\n- [ ] Every deployed app has an entry (`app`, `type`, `url`, `isa`, `protected`) and an ISA with a `## Test Strategy`\n- [ ] `bun LIFEOS/BUNKER/Bunker.ts test` is green, or its failures are real\n- [ ] `bun LIFEOS/BUNKER/Bunker.ts sync-cloud` pushes them (needs bunker-health deployed)\n- [ ] Pulse `/bunker` shows every bay with a SEC pill"
+  },
+  {
+    "title": "Write your AS3 outcome claims",
+    "body": "`LIFEOS/AS3/ISA.md` currently rolls up only the subsystem ISAs. Its `## Not yet specified` fog holds your own TELOS-level outcomes. Those are yours to write and can't be derived.\n\n**Done when**\n- [ ] Outcome claims are written from `USER/TELOS` (MISSION, GOALS), each with a probe or a `manual` row\n- [ ] The fog line is retired in `## Decisions`"
+  },
+  {
+    "title": "Pulse Assistant tab (DA chat surface)",
+    "body": "Daniel's Pulse has an **Assistant** tab, and `systemNav` already links `/assistant` (module `da`), but no module or page backs it (registry § 2; upstream danielmiessler/LifeOS#1173).\n\n**Proposal:** a page that sends a question to the DA through Lockbox `da.ask` (or the local relay directly), with history stored under `MEMORY/STATE/assistant/`.\n\n**Done when**\n- [ ] Asking a question in the tab returns the DA's answer, routed by the Router hook\n- [ ] The `da` module switch works\n- [ ] The observer scope is `full`"
+  },
+  {
+    "title": "Investigate the Pulse Gauntlet tab",
+    "body": "The 2026-09-19 recording shows a **Gauntlet** tab and a public **Gauntlet** skill. Nothing public says what it does.\n\n**Done when**\n- [ ] Its purpose is found (upstream docs/issues, `gh issue list -R danielmiessler/LifeOS --search gauntlet`, or the next release), or you define your own\n- [ ] It's built, or closed as not planned, and recorded in `UnshippedRegistry.md`"
+  },
+  {
+    "title": "Apple Contacts two-way sync for People",
+    "body": "The People ISA (`LIFEOS/PEOPLE/ISA.md` ISC-4) is unchecked. The store, interactions, customer state, projection and tick are built. The macOS Contacts sync isn't, because it needs Contacts.framework entitlements.\n\n**Done when**\n- [ ] Contacts ↔ `USER/PEOPLE/people.jsonl` round-trips (add, rename, delete), with no network calls\n- [ ] It runs inside the hourly `com.lifeos.people` tick\n- [ ] PEOPLE ISC-4 is checked and the ISA `phase: complete`"
+  },
+  {
+    "title": "Wire the Synapse inputs to the capture contract",
+    "body": "Synapse's journal, grading and routing are built (`amber` CLI + `amber-ledger` Worker). The inputs in `DOCUMENTATION/Synapse/SynapseSystem.md` § Inputs still need wiring to `POST /capture` / `amber capture`: summarize hotkey, bookmarks, harvest, voice markers, feed, reader.\n\n**Done when**\n- [ ] Each live input writes through the capture contract with its own `source`\n- [ ] `bun LIFEOS/SYNAPSE/Synapse.ts telos-push` has run, so cloud grading scores against your goals\n- [ ] Pulse `/synapse` ledger counts are non-zero per source"
+  },
+  {
+    "title": "Pull upstream issue bodies and comments for the reconstruction",
+    "body": "This session's proxy blocked the GitHub REST API, so the registry cites upstream issues and PRs by title only (§ 6 Limits).\n\n**Done when**\n- [ ] `gh issue list -R danielmiessler/LifeOS --state all --json number,title,body,comments --limit 2500 > upstream-issues.json` and the same for `gh pr list` have been run\n- [ ] Grepped for Router/Glance/Jev, Decisions, Lockbox, Synapse, Socrates, Vera, Errata, Achilles, Helios, Gauntlet, Assistant, Codex and Pi; behavior details found there are folded into the matching ISA or code"
+  },
+  {
+    "title": "Build the private _HELIOS skill family for the Helios agent",
+    "body": "`agents/Helios.md` (CYBER lane) references `_HELIOS`, `_HELIOS_API`, `_HELIOS_BINARY`, `_HELIOS_JAVASCRIPT`, `_HELIOS_MOBILE`, `_HELIOS_PROMPT_INJECTION`, `_HELIOS_WEB` and `_HELIOS_REPORT`. None exist yet.\n\n**Done when**\n- [ ] Each skill is created with CreateSkill, holds your authorized-target methodology, and writes findings to Achilles\n- [ ] `_HELIOS_REPORT` renders a report from `Achilles.ts list --asset <x>`"
+  },
+  {
+    "title": "Decide and build your private _UNDERSCORE skills",
+    "body": "The registry (§ 4) lists ~95 private skill names from Daniel's tree, grouped by domain: security, system/release, business, content/media, personal ops. Their purposes are inferred from the names only. `_LIFEOS` is already built.\n\n**Done when**\n- [ ] Each one is marked build / skip for your life\n- [ ] The chosen ones are created with CreateSkill (the underscore prefix keeps them CONFIDENTIAL and out of any release)"
+  },
+  {
+    "title": "Missing public skills from the recording",
+    "body": "Skills in Daniel's 2026-09 listing that this release lacks: AccountPool, ArtDirection, BitterLessonEngineering (shipped here as BitterPillEngineering), ComputerUse, Excalidraw (shipped here as Tldraw), Gauntlet, Hermes (sidecar code ships, skill doesn't), LifeOSHooks, ReadIt, TableTennis, USStats, synced.\n\n**Done when**\n- [ ] Each one is marked build / skip / rename-alias, and the chosen ones are created with CreateSkill"
+  },
+  {
+    "title": "Label router outcomes, then decide on promoting the shadow callers",
+    "body": "`dispatch-advisor` enforces on a principal override, not a measured agreement rate. `satisfaction-capture` and `socrates-answer` are in SHADOW. The Router's scorer is hand-weighted.\n\n**Done when**\n- [ ] At least 100 router decisions are labeled with `bun LIFEOS/DECISIONS/Decisions.ts outcome <id> agree|disagree`\n- [ ] `Decisions.ts report` shows each caller's agreement; promote with `enforce <caller> --agreement N --model jev-1.13` where it's earned\n- [ ] At ≥500 labeled rows, train lane and effort models from `decisions.jsonl` to replace the hand weights (ROUTER ISA Remaining Work)"
+  },
+  {
+    "title": "Cut the release with /vb",
+    "body": "`LIFEOS/VERSION` is still 7.40.4, even though this branch adds subsystems, hooks, agents and Workers.\n\n**Done when**\n- [ ] After mrkingsleyobi/LifeOS#7 merges, `bun skills/_LIFEOS/Tools/VersionBump.ts classify` has been reviewed (expect FEATURE)\n- [ ] `vb --title \"Router Jev and rebuilt subsystems\" --yes --commit --tag` has run\n- [ ] Pulse `/ledger` shows the release"
+  }
+]

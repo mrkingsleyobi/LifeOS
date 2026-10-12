@@ -1,0 +1,18 @@
+{
+  "name": "lifeos-cloudflare",
+  "private": true,
+  "description": "Cloudflare Workers for LifeOS subsystems that run while the laptop sleeps (Arbol, Bunker health + security plane, Lockbox, Router edge, Errata intake).",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "deploy:bunker": "wrangler deploy -c workers/bunker-health/wrangler.toml",
+    "deploy:arbol": "wrangler deploy -c workers/arbol/wrangler.toml",
+    "deploy:lockbox": "wrangler deploy -c workers/lockbox/wrangler.toml",
+    "deploy:router": "wrangler deploy -c workers/router-edge/wrangler.toml",
+    "deploy:errata": "wrangler deploy -c workers/errata-intake/wrangler.toml"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260924.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.140.0"
+  }
+}
